@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Project, Task, LinkType, Annotation } from './types';
 import ProjectList from './components/ProjectList';
@@ -15,6 +14,7 @@ const App: React.FC = () => {
     lastModified: Date.now(),
     startDate: new Date().setHours(0,0,0,0) - (2 * 24 * 60 * 60 * 1000), // Default to 2 days ago
     annotations: [], 
+    zoneOrder: ['区域一', '区域二', '区域三', '区域四'],
     tasks: [
       // 区域一
       { id: '10', name: '施工准备', duration: 20, predecessors: [], type: LinkType.Real, zone: '区域一' },
@@ -25,11 +25,12 @@ const App: React.FC = () => {
       { id: '60', name: '弱电系统受压', duration: 30, predecessors: ['50'], type: LinkType.Real, zone: '区域一' },
       { id: '70', name: '灯具安装', duration: 30, predecessors: ['60'], type: LinkType.Real, zone: '区域一' },
       
-      // 区域二
-      { id: '80', name: '测量放线', duration: 32, predecessors: ['10'], type: LinkType.Real, zone: '区域二' },
-      { id: '90', name: '切槽配管', duration: 233, predecessors: ['80'], type: LinkType.Real, zone: '区域二' },
-      { id: '100', name: '灯箱安装', duration: 125, predecessors: ['90'], type: LinkType.Real, zone: '区域二' },
-      { id: '110', name: '电缆敷设', duration: 100, predecessors: ['100'], type: LinkType.Real, zone: '区域二' },
+      // 区域二 (Parent Task Example)
+      { id: '80', name: '区域二综合作业', duration: 0, predecessors: [], type: LinkType.Real, zone: '区域二', isCollapsed: false },
+      { id: '81', name: '测量放线', duration: 32, predecessors: ['10'], type: LinkType.Real, zone: '区域二', parentId: '80' },
+      { id: '90', name: '切槽配管', duration: 233, predecessors: ['81'], type: LinkType.Real, zone: '区域二', parentId: '80' },
+      { id: '100', name: '灯箱安装', duration: 125, predecessors: ['90'], type: LinkType.Real, zone: '区域二', parentId: '80' },
+      { id: '110', name: '电缆敷设', duration: 100, predecessors: ['100'], type: LinkType.Real, zone: '区域二', parentId: '80' },
       
       // 区域三
       { id: '120', name: '高杆灯基础施工', duration: 42, predecessors: ['10'], type: LinkType.Real, zone: '区域三' },
@@ -37,7 +38,7 @@ const App: React.FC = () => {
       { id: '140', name: '切槽配管', duration: 202, predecessors: ['130'], type: LinkType.Real, zone: '区域三' },
       { id: '150', name: '配电亭安装', duration: 47, predecessors: ['140'], type: LinkType.Real, zone: '区域三' },
       
-      // 区域四 - 关键路径部分
+      // 区域四
       { id: '200', name: '主体结构及装饰', duration: 76, predecessors: ['10'], type: LinkType.Real, zone: '区域四' },
       { id: '210', name: '机电管线安装', duration: 112, predecessors: ['200'], type: LinkType.Real, zone: '区域四' },
       { id: '220', name: '机电设备安装及调试', duration: 60, predecessors: ['210'], type: LinkType.Real, zone: '区域四' },
@@ -46,7 +47,6 @@ const App: React.FC = () => {
     ] 
   };
 
-  // --- State with History for Undo/Redo ---
   const loadProjects = () => {
     try {
       const saved = localStorage.getItem('intelliPlan_projects');
@@ -66,23 +66,18 @@ const App: React.FC = () => {
   const projects = history[historyIndex];
   const [activeProjectId, setActiveProjectId] = useState<string>(projects[0]?.id || '1');
 
-  // Layout State for 3 columns
-  const [leftWidth, setLeftWidth] = useState(240); // Project List
-  const [middleWidth, setMiddleWidth] = useState(400); // Schedule Table
+  const [leftWidth, setLeftWidth] = useState(240);
+  const [middleWidth, setMiddleWidth] = useState(400);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   
-  // Analysis State (calculated by NetworkDiagram)
   const [currentCriticalPath, setCurrentCriticalPath] = useState<string[]>([]);
   const [projectDuration, setProjectDuration] = useState(0);
 
-  // --- Helpers ---
   const activeProject = projects.find(p => p.id === activeProjectId) || projects[0];
 
-  // --- Derived State ---
-  // Use the project's explicit start date if available, otherwise default to today
   const projectStartDate = useMemo(() => {
     if (activeProject.startDate) {
       return new Date(activeProject.startDate);
@@ -92,20 +87,24 @@ const App: React.FC = () => {
     return d;
   }, [activeProject.startDate]);
 
-  // Helper: Calculate CPM (Critical Path Method)
-  // We perform this here so the ScheduleTable can display calculated dates
+  // --- CPM Calculation Logic (including Rollup) ---
   const calculatedTasks = useMemo(() => {
     const _tasks = JSON.parse(JSON.stringify(activeProject.tasks)) as Task[];
     const taskMap = new Map(_tasks.map(t => [t.id, t]));
+
+    // Mark summary tasks
+    _tasks.forEach(t => {
+      t.isSummary = _tasks.some(child => child.parentId === t.id);
+    });
 
     // Forward Pass
     let changed = true;
     while(changed) {
       changed = false;
       _tasks.forEach(task => {
-        // CHANGED: Initialize to -Infinity to allow start dates before Project Start (Day 0)
+        if (task.isSummary) return; // Summaries are calculated by rollup
+
         let maxES = -Infinity;
-        
         if (task.predecessors.length > 0) {
           task.predecessors.forEach(pid => {
             const p = taskMap.get(pid);
@@ -115,19 +114,11 @@ const App: React.FC = () => {
           });
         }
         
-        // Apply manual constraint (Start No Earlier Than)
         if (task.constraintDate !== undefined) {
-          if (maxES === -Infinity) {
-              maxES = task.constraintDate;
-          } else {
-              maxES = Math.max(maxES, task.constraintDate);
-          }
+            maxES = maxES === -Infinity ? task.constraintDate : Math.max(maxES, task.constraintDate);
         }
 
-        // If still -Infinity (no preds, no constraint), default to 0
-        if (maxES === -Infinity) {
-          maxES = 0;
-        }
+        if (maxES === -Infinity) maxES = 0;
 
         if (task.earlyStart !== maxES) {
           task.earlyStart = maxES;
@@ -137,29 +128,53 @@ const App: React.FC = () => {
       });
     }
 
-    // CHANGED: Calculate Project Duration correctly even if it's negative (though rare)
-    // Find the maximum finish time across all tasks
-    let pDuration = 0;
-    if (_tasks.length > 0) {
-        const finishes = _tasks.map(t => t.earlyFinish !== undefined ? t.earlyFinish : -Infinity);
-        const maxFinish = Math.max(...finishes);
-        // If maxFinish is valid (not -Infinity), use it. otherwise 0.
-        if (maxFinish !== -Infinity) {
-            pDuration = maxFinish;
-        }
+    // Rollup Logic for Summary Tasks
+    // Start = min(children.Start), Finish = max(children.Finish)
+    let rollupChanged = true;
+    while(rollupChanged) {
+        rollupChanged = false;
+        _tasks.forEach(parent => {
+            if (parent.isSummary) {
+                const children = _tasks.filter(t => t.parentId === parent.id);
+                if (children.length > 0) {
+                    const validChildren = children.filter(c => c.earlyStart !== undefined && c.earlyFinish !== undefined);
+                    if (validChildren.length > 0) {
+                        const minStart = Math.min(...validChildren.map(c => c.earlyStart!));
+                        const maxFinish = Math.max(...validChildren.map(c => c.earlyFinish!));
+                        
+                        if (parent.earlyStart !== minStart || parent.earlyFinish !== maxFinish) {
+                            parent.earlyStart = minStart;
+                            parent.earlyFinish = maxFinish;
+                            parent.duration = maxFinish - minStart;
+                            rollupChanged = true;
+                        }
+                    }
+                }
+            }
+        });
     }
+
+    // Project Duration
+    let pDuration = 0;
+    const finishes = _tasks.map(t => t.earlyFinish !== undefined ? t.earlyFinish : -Infinity);
+    const maxFinish = Math.max(...finishes);
+    if (maxFinish !== -Infinity) pDuration = maxFinish;
 
     // Backward Pass
     _tasks.forEach(t => { 
-      t.lateFinish = pDuration; 
-      t.lateStart = pDuration - t.duration; 
+        if(!t.lateFinish) {
+          t.lateFinish = pDuration; 
+          t.lateStart = pDuration - t.duration; 
+        }
     });
     
     changed = true;
     while(changed) {
       changed = false;
       _tasks.forEach(task => {
-        const successors = _tasks.filter(t => t.predecessors.includes(task.id));
+        if (task.isSummary) return;
+
+        const successors = _tasks.filter(t => t.predecessors.includes(task.id) && !t.isSummary);
         if (successors.length > 0) {
           const minLS = Math.min(...successors.map(s => s.lateStart !== undefined ? s.lateStart : pDuration));
           if (task.lateFinish !== minLS) {
@@ -172,14 +187,119 @@ const App: React.FC = () => {
     }
 
     _tasks.forEach(t => {
-      const totalFloat = (t.lateStart || 0) - (t.earlyStart || 0);
-      t.totalFloat = totalFloat;
-      t.isCritical = Math.abs(totalFloat) < 0.001;
+      if (t.isSummary) {
+          t.totalFloat = 0; t.isCritical = false;
+      } else {
+          const totalFloat = (t.lateStart || 0) - (t.earlyStart || 0);
+          t.totalFloat = totalFloat;
+          t.isCritical = Math.abs(totalFloat) < 0.001;
+      }
+    });
+    
+    // Free Float
+    _tasks.forEach(task => {
+        if (task.isSummary) return;
+        const successors = _tasks.filter(t => t.predecessors.includes(task.id) && !t.isSummary);
+        if (successors.length > 0) {
+            const minES = Math.min(...successors.map(s => s.earlyStart || 0));
+            task.freeFloat = minES - (task.earlyFinish || 0);
+        } else {
+            task.freeFloat = pDuration - (task.earlyFinish || 0);
+        }
     });
 
     return _tasks;
   }, [activeProject.tasks]);
 
+  // --- Diagram Tasks Calculation (Filtering Hidden Nodes) ---
+  const diagramTasks = useMemo(() => {
+    // Logic:
+    // 1. If Summary is Collapsed -> Show Summary Node, Hide Children.
+    // 2. If Summary is Expanded -> Hide Summary Node, Show Children.
+    // 3. Leaf tasks -> Show.
+    // 4. Rewire dependencies.
+
+    const idMap = new Map<string, Task>();
+    calculatedTasks.forEach(t => idMap.set(t.id, t));
+    const visibleIds = new Set<string>();
+    const taskToVisibleMap = new Map<string, string>(); // Original ID -> Visible Representative ID
+
+    const getVisibleAncestor = (taskId: string): string | null => {
+         let currentId = taskId;
+         while(currentId) {
+             const t = idMap.get(currentId);
+             if (!t) return null;
+             
+             // Check parents upwards
+             let ptr = t.parentId;
+             
+             // Find highest collapsed ancestor
+             const ancestors: Task[] = [];
+             while(ptr) {
+                 const p = idMap.get(ptr);
+                 if(p) { ancestors.push(p); ptr = p.parentId; } else break;
+             }
+             
+             // If any ancestor is collapsed, the highest one is the representative
+             for(let i=ancestors.length-1; i>=0; i--) {
+                 if(ancestors[i].isCollapsed) {
+                     return ancestors[i].id;
+                 }
+             }
+
+             // No collapsed ancestor.
+             // If this task IS a summary and is Expanded -> it is NOT visible itself.
+             // But if we are looking for a representative for a child, and the parent is expanded, 
+             // the child itself is the representative (unless child is also summary...).
+             
+             // So, if I am asking for myself:
+             if (t.isSummary) {
+                 if (t.isCollapsed) return t.id; // Collapsed summary is visible
+                 return null; // Expanded summary is NOT visible
+             } else {
+                 return t.id; // Leaf is visible (since no collapsed ancestor)
+             }
+         }
+         return null;
+    };
+
+    calculatedTasks.forEach(t => {
+        const rep = getVisibleAncestor(t.id);
+        if (rep) {
+            taskToVisibleMap.set(t.id, rep);
+            visibleIds.add(rep);
+        }
+    });
+
+    const resultTasks: Task[] = [];
+    visibleIds.forEach(vid => {
+        const t = idMap.get(vid);
+        if (t) resultTasks.push({ ...t, predecessors: [] }); // Clear preds for rewiring
+    });
+
+    // Rewire
+    const newLinks = new Map<string, Set<string>>();
+    calculatedTasks.forEach(t => {
+        const targetVisible = taskToVisibleMap.get(t.id);
+        if (!targetVisible) return;
+
+        t.predecessors.forEach(pid => {
+            const sourceVisible = taskToVisibleMap.get(pid);
+            if (sourceVisible && sourceVisible !== targetVisible) {
+                if (!newLinks.has(targetVisible)) newLinks.set(targetVisible, new Set());
+                newLinks.get(targetVisible)?.add(sourceVisible);
+            }
+        });
+    });
+
+    resultTasks.forEach(t => {
+        if (newLinks.has(t.id)) {
+            t.predecessors = Array.from(newLinks.get(t.id)!);
+        }
+    });
+
+    return resultTasks;
+  }, [calculatedTasks]);
 
   const updateProjectsWithHistory = (newProjects: Project[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
@@ -188,48 +308,25 @@ const App: React.FC = () => {
     setHistoryIndex(newHistory.length - 1);
   };
 
-  const handleUndo = () => {
-    if (historyIndex > 0) {
-      setHistoryIndex(historyIndex - 1);
-    }
-  };
-
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      setHistoryIndex(historyIndex + 1);
-    }
-  };
+  const handleUndo = () => { if (historyIndex > 0) setHistoryIndex(historyIndex - 1); };
+  const handleRedo = () => { if (historyIndex < history.length - 1) setHistoryIndex(historyIndex + 1); };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-        if (e.shiftKey) {
-          handleRedo();
-        } else {
-          handleUndo();
-        }
-        e.preventDefault();
-      } else if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
-        handleRedo();
-        e.preventDefault();
-      } else if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        handleSaveToServer();
-        e.preventDefault();
-      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.shiftKey ? handleRedo() : handleUndo(); e.preventDefault(); } 
+      else if ((e.metaKey || e.ctrlKey) && e.key === 'y') { handleRedo(); e.preventDefault(); } 
+      else if ((e.metaKey || e.ctrlKey) && e.key === 's') { handleSaveToServer(); e.preventDefault(); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [historyIndex, history]);
 
   const handleUpdateTasks = (newTasks: Task[]) => {
-    const updatedProjects = projects.map(p => 
-      p.id === activeProjectId ? { ...p, tasks: newTasks, lastModified: Date.now() } : p
-    );
+    const updatedProjects = projects.map(p => p.id === activeProjectId ? { ...p, tasks: newTasks, lastModified: Date.now() } : p);
     updateProjectsWithHistory(updatedProjects);
   };
 
   const handleTaskUpdate = (updatedTask: Task) => {
-    // We must find the task in the original array, not the calculated one
     const newTasks = activeProject.tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
     handleUpdateTasks(newTasks);
   };
@@ -246,19 +343,10 @@ const App: React.FC = () => {
     handleUpdateTasks([...activeProject.tasks, newTask]);
   };
 
-  const handleDeleteTask = (id: string) => {
-    handleUpdateTasks(activeProject.tasks.filter(t => t.id !== id));
-  };
+  const handleDeleteTask = (id: string) => { handleUpdateTasks(activeProject.tasks.filter(t => t.id !== id)); };
 
   const handleAddProject = () => {
-    const newProject: Project = {
-      id: crypto.randomUUID(),
-      name: '新建工程项目',
-      lastModified: Date.now(),
-      startDate: new Date().setHours(0,0,0,0), // Default to today
-      tasks: [],
-      annotations: []
-    };
+    const newProject: Project = { id: crypto.randomUUID(), name: '新建工程项目', lastModified: Date.now(), startDate: new Date().setHours(0,0,0,0), tasks: [], annotations: [], zoneOrder: [] };
     const updatedProjects = [...projects, newProject];
     updateProjectsWithHistory(updatedProjects);
     setActiveProjectId(newProject.id);
@@ -267,15 +355,11 @@ const App: React.FC = () => {
   const handleDeleteProject = (id: string) => {
     const newProjects = projects.filter(p => p.id !== id);
     updateProjectsWithHistory(newProjects);
-    if (activeProjectId === id && newProjects.length > 0) {
-      setActiveProjectId(newProjects[0].id);
-    }
+    if (activeProjectId === id && newProjects.length > 0) setActiveProjectId(newProjects[0].id);
   };
   
   const handleRenameProject = (id: string, newName: string) => {
-    const updatedProjects = projects.map(p => 
-      p.id === id ? { ...p, name: newName, lastModified: Date.now() } : p
-    );
+    const updatedProjects = projects.map(p => p.id === id ? { ...p, name: newName, lastModified: Date.now() } : p);
     updateProjectsWithHistory(updatedProjects);
   };
 
@@ -292,175 +376,100 @@ const App: React.FC = () => {
   const handleSaveToServer = async () => {
     setIsSaving(true);
     try {
-        // Mock server save with delay
         await new Promise(resolve => setTimeout(resolve, 800));
         localStorage.setItem('intelliPlan_projects', JSON.stringify(projects));
-        
         setShowSaveSuccess(true);
         setTimeout(() => setShowSaveSuccess(false), 2000);
-    } catch (e) {
-        alert("保存失败: " + e);
-    } finally {
-        setIsSaving(false);
-    }
+    } catch (e) { alert("保存失败: " + e); } finally { setIsSaving(false); }
   };
 
   const handleImportProject = (importedTasks: Task[], startDate?: number) => {
-    const newProject: Project = {
-      id: crypto.randomUUID(),
-      name: '导入的工程 ' + new Date().toLocaleTimeString(),
-      lastModified: Date.now(),
-      startDate: startDate || new Date().setHours(0,0,0,0), // Use detected start date or default to today
-      tasks: importedTasks,
-      annotations: []
-    };
+    const newProject: Project = { id: crypto.randomUUID(), name: '导入的工程 ' + new Date().toLocaleTimeString(), lastModified: Date.now(), startDate: startDate || new Date().setHours(0,0,0,0), tasks: importedTasks, annotations: [], zoneOrder: [] };
     const updatedProjects = [...projects, newProject];
     updateProjectsWithHistory(updatedProjects);
     setActiveProjectId(newProject.id);
   };
 
   const handleLoadProject = (importedProject: Project) => {
-      // Validate structure roughly
-      if (!importedProject.tasks || !Array.isArray(importedProject.tasks)) {
-          alert("文件格式错误：缺少任务数据");
-          return;
-      }
-      
-      // Avoid ID collision
+      if (!importedProject.tasks || !Array.isArray(importedProject.tasks)) { alert("文件格式错误：缺少任务数据"); return; }
       let finalProject = { ...importedProject };
-      if (projects.some(p => p.id === finalProject.id)) {
-          // If collision, create copy with new ID
-          finalProject.id = crypto.randomUUID();
-          finalProject.name = finalProject.name + " (导入副本)";
-      }
-      
-      // Update timestamps
+      if (projects.some(p => p.id === finalProject.id)) { finalProject.id = crypto.randomUUID(); finalProject.name = finalProject.name + " (导入副本)"; }
       finalProject.lastModified = Date.now();
-      
       const updatedProjects = [...projects, finalProject];
       updateProjectsWithHistory(updatedProjects);
       setActiveProjectId(finalProject.id);
   };
 
   const handleUpdateAnnotations = (newAnnotations: Annotation[]) => {
-    const updatedProjects = projects.map(p => 
-      p.id === activeProjectId ? { ...p, annotations: newAnnotations, lastModified: Date.now() } : p
-    );
+    const updatedProjects = projects.map(p => p.id === activeProjectId ? { ...p, annotations: newAnnotations, lastModified: Date.now() } : p);
     updateProjectsWithHistory(updatedProjects);
+  };
+  
+  const handleZoneReorder = (newOrder: string[]) => {
+      const updatedProjects = projects.map(p => p.id === activeProjectId ? { ...p, zoneOrder: newOrder, lastModified: Date.now() } : p);
+      updateProjectsWithHistory(updatedProjects);
   };
 
   const startResizingLeft = useCallback((mouseDownEvent: React.MouseEvent) => {
     const startX = mouseDownEvent.clientX;
     const startWidth = leftWidth;
-    const doDrag = (dragEvent: MouseEvent) => {
-      setLeftWidth(Math.max(150, Math.min(400, startWidth + dragEvent.clientX - startX)));
-    };
-    const stopDrag = () => {
-      document.removeEventListener('mousemove', doDrag);
-      document.removeEventListener('mouseup', stopDrag);
-    };
-    document.addEventListener('mousemove', doDrag);
-    document.addEventListener('mouseup', stopDrag);
+    const doDrag = (dragEvent: MouseEvent) => setLeftWidth(Math.max(150, Math.min(400, startWidth + dragEvent.clientX - startX)));
+    const stopDrag = () => { document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); };
+    document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag);
   }, [leftWidth]);
 
   const startResizingMiddle = useCallback((mouseDownEvent: React.MouseEvent) => {
     const startX = mouseDownEvent.clientX;
     const startWidth = middleWidth;
-    const doDrag = (dragEvent: MouseEvent) => {
-      setMiddleWidth(Math.max(300, Math.min(800, startWidth + dragEvent.clientX - startX)));
-    };
-    const stopDrag = () => {
-      document.removeEventListener('mousemove', doDrag);
-      document.removeEventListener('mouseup', stopDrag);
-    };
-    document.addEventListener('mousemove', doDrag);
-    document.addEventListener('mouseup', stopDrag);
+    const doDrag = (dragEvent: MouseEvent) => setMiddleWidth(Math.max(300, Math.min(800, startWidth + dragEvent.clientX - startX)));
+    const stopDrag = () => { document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); };
+    document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag);
   }, [middleWidth]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden text-slate-800 font-sans relative">
-      {isLoading && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center text-white flex-col backdrop-blur-sm">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white mb-4"></div>
-          <p>AI模型正在智能识别与计算...</p>
-        </div>
-      )}
+      {isLoading && <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center text-white flex-col backdrop-blur-sm"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white mb-4"></div><p>AI模型正在智能识别与计算...</p></div>}
+      {showSaveSuccess && <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg z-[100] flex items-center gap-2 animate-in fade-in slide-in-from-top-4"><CloudCheck size={20} /><span className="font-medium">项目已成功保存到服务器</span></div>}
 
-      {showSaveSuccess && (
-         <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg z-[100] flex items-center gap-2 animate-in fade-in slide-in-from-top-4">
-            <CloudCheck size={20} />
-            <span className="font-medium">项目已成功保存到服务器</span>
-         </div>
-      )}
-
-      {/* 1. Project List Panel */}
       <div style={{ width: leftWidth }} className="flex-shrink-0 relative h-full">
         <ProjectList 
-          projects={projects} 
-          activeProjectId={activeProjectId} 
-          onSelectProject={setActiveProjectId}
-          onAddProject={handleAddProject}
-          onDeleteProject={handleDeleteProject}
-          onImportProject={handleImportProject}
-          onLoadProject={handleLoadProject}
-          onRenameProject={handleRenameProject}
-          onSaveProject={handleSaveProject}
-          onSaveToServer={handleSaveToServer}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          canUndo={historyIndex > 0}
-          canRedo={historyIndex < history.length - 1}
-          isLoading={isLoading}
-          isSaving={isSaving}
-          setIsLoading={setIsLoading}
+          projects={projects} activeProjectId={activeProjectId} onSelectProject={setActiveProjectId} onAddProject={handleAddProject} onDeleteProject={handleDeleteProject} onImportProject={handleImportProject} onLoadProject={handleLoadProject} onRenameProject={handleRenameProject} onSaveProject={handleSaveProject} onSaveToServer={handleSaveToServer} onUndo={handleUndo} onRedo={handleRedo} canUndo={historyIndex > 0} canRedo={historyIndex < history.length - 1} isLoading={isLoading} isSaving={isSaving} setIsLoading={setIsLoading}
         />
-        <div 
-          className="resize-handle-h absolute top-0 right-0 h-full w-1 hover:bg-blue-400 z-10"
-          onMouseDown={startResizingLeft}
-        ></div>
+        <div className="resize-handle-h absolute top-0 right-0 h-full w-1 hover:bg-blue-400 z-10" onMouseDown={startResizingLeft}></div>
       </div>
 
-      {/* 2. Schedule Table Panel */}
       <div style={{ width: middleWidth }} className="flex-shrink-0 relative h-full flex flex-col border-r border-slate-200">
          <ScheduleTable 
             tasks={calculatedTasks} 
-            onUpdateTask={handleTaskUpdate} 
-            onAddTask={handleAddTask}
-            onDeleteTask={handleDeleteTask}
-            onReplaceTasks={handleUpdateTasks} // Pass bulk update function
-            projectStartDate={projectStartDate}
+            onUpdateTask={handleTaskUpdate} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onReplaceTasks={handleUpdateTasks} projectStartDate={projectStartDate}
           />
-         <div 
-          className="resize-handle-h absolute top-0 right-0 h-full w-1 hover:bg-blue-400 z-10"
-          onMouseDown={startResizingMiddle}
-        ></div>
+         <div className="resize-handle-h absolute top-0 right-0 h-full w-1 hover:bg-blue-400 z-10" onMouseDown={startResizingMiddle}></div>
       </div>
 
-      {/* 3. Network Diagram Panel */}
       <div className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 relative">
           <NetworkDiagram 
-            tasks={calculatedTasks}
+            tasks={diagramTasks} // Pass filtered tasks to diagram
             annotations={activeProject.annotations || []} 
-            onUpdateTasks={handleUpdateTasks}
+            onUpdateTasks={(updatedDisplayTasks: Task[]) => {
+                // Remap changes from display tasks to original tasks
+                const newFullTasks = [...activeProject.tasks];
+                updatedDisplayTasks.forEach(dt => {
+                    const idx = newFullTasks.findIndex(t => t.id === dt.id);
+                    if (idx >= 0) newFullTasks[idx] = { ...newFullTasks[idx], ...dt };
+                });
+                handleUpdateTasks(newFullTasks);
+            }}
             onUpdateAnnotations={handleUpdateAnnotations}
             projectStartDate={projectStartDate}
-            onUpdateAnalysis={(path, duration) => {
-              setCurrentCriticalPath(path);
-              setProjectDuration(duration);
-            }}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
-            canUndo={historyIndex > 0}
-            canRedo={historyIndex < history.length - 1}
-            projectName={activeProject.name}
+            onUpdateAnalysis={(path, duration) => { setCurrentCriticalPath(path); setProjectDuration(duration); }}
+            onUndo={handleUndo} onRedo={handleRedo} canUndo={historyIndex > 0} canRedo={historyIndex < history.length - 1} projectName={activeProject.name}
+            // Zone Ordering Props
+            zoneOrder={activeProject.zoneOrder}
+            onZoneOrderChange={handleZoneReorder}
           />
       </div>
 
-      <AIAssistant 
-        tasks={calculatedTasks} 
-        criticalPath={currentCriticalPath}
-        projectDuration={projectDuration}
-      />
+      <AIAssistant tasks={calculatedTasks} criticalPath={currentCriticalPath} projectDuration={projectDuration} />
     </div>
   );
 };

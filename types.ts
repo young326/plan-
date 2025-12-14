@@ -29,6 +29,7 @@ export interface Task {
   zone?: string; // Partition/Zone
   description?: string;
   parentId?: string; // For hierarchical grouping
+  isCollapsed?: boolean; // UI state for parent tasks
   constraintDate?: number; // Manual start constraint (Start No Earlier Than)
   labelOffsetX?: number; // Horizontal offset for the task label
   manualLane?: number; // Manual vertical lane index within the zone (0-based)
@@ -41,6 +42,7 @@ export interface Task {
   totalFloat?: number;
   freeFloat?: number;
   isCritical?: boolean;
+  isSummary?: boolean; // Computed property
 }
 
 export interface Project {
@@ -51,6 +53,7 @@ export interface Project {
   tasks: Task[];
   annotations?: Annotation[]; // Added annotations support
   description?: string;
+  zoneOrder?: string[]; // Custom order for zones
 }
 
 export interface NetworkNode {
