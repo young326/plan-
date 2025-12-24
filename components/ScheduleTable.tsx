@@ -18,13 +18,11 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
   const [isWpsModalOpen, setIsWpsModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Tree View Logic ---
   const flattenedTasks = useMemo(() => {
     const result: { task: Task; level: number }[] = [];
     const childrenMap = new Map<string, Task[]>();
     const roots: Task[] = [];
 
-    // Build hierarchy
     tasks.forEach(t => {
       if (t.parentId) {
         if (!childrenMap.has(t.parentId)) childrenMap.set(t.parentId, []);
@@ -39,9 +37,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
         result.push({ task: node, level });
         if (!node.isCollapsed) {
           const children = childrenMap.get(node.id);
-          if (children) {
-             traverse(children, level + 1);
-          }
+          if (children) traverse(children, level + 1);
         }
       });
     };
@@ -50,9 +46,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
     return result;
   }, [tasks]);
 
-  const toggleCollapse = (task: Task) => {
-    onUpdateTask({ ...task, isCollapsed: !task.isCollapsed });
-  };
+  const toggleCollapse = (task: Task) => onUpdateTask({ ...task, isCollapsed: !task.isCollapsed });
 
   const togglePredecessor = (targetTask: Task, predId: string) => {
     const currentPreds = targetTask.predecessors || [];
@@ -62,17 +56,13 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
 
   const editingTask = tasks.find(t => t.id === linkModalTaskId);
 
-  // Date Utilities
   const formatDateForInput = (offset?: number) => {
     if (offset === undefined) return '';
     const start = new Date(projectStartDate);
     start.setHours(0,0,0,0);
     const d = new Date(start);
     d.setDate(d.getDate() + offset);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+    return d.toISOString().split('T')[0];
   };
 
   const getDaysFromDateStr = (dateStr: string) => {
@@ -80,10 +70,12 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
     const target = new Date(y, m - 1, d);
     const start = new Date(projectStartDate);
     start.setHours(0,0,0,0);
-    const diffTime = target.getTime() - start.getTime();
-    return Math.round(diffTime / (1000 * 3600 * 24));
+    return Math.round((target.getTime() - start.getTime()) / (1000 * 3600 * 24));
   };
 
+  /**
+   * 核心逻辑调整：修改开始时间 -> 固定完成时间，更新工期
+   */
   const handleStartChange = (task: Task, dateStr: string) => {
     if (!dateStr) {
       const { constraintDate, ...rest } = task;
@@ -91,14 +83,20 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
       return;
     }
     const newStart = getDaysFromDateStr(dateStr);
-    onUpdateTask({ ...task, constraintDate: newStart });
+    const currentFinish = task.earlyFinish || (newStart + task.duration);
+    // 更新约束开始日期，并重新计算工期以保持完成日期基本不变
+    const newDuration = Math.max(0, currentFinish - newStart);
+    onUpdateTask({ ...task, constraintDate: newStart, duration: newDuration });
   };
 
+  /**
+   * 核心逻辑调整：修改完成时间 -> 固定开始时间，更新工期
+   */
   const handleEndChange = (task: Task, dateStr: string) => {
     if (!dateStr) return;
-    const selectedDateOffset = getDaysFromDateStr(dateStr);
+    const selectedFinishOffset = getDaysFromDateStr(dateStr) + 1; // 结束日期通常包含当天
     const currentStart = task.earlyStart || 0;
-    const newDuration = Math.max(0, (selectedDateOffset - currentStart) + 1);
+    const newDuration = Math.max(0, selectedFinishOffset - currentStart);
     onUpdateTask({ ...task, duration: newDuration });
   };
 
@@ -119,14 +117,12 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
       const idx = flattenedTasks.findIndex(item => item.task.id === task.id);
       if (idx > 0) {
         if (e.shiftKey) {
-            // Outdent
             const currentParentId = task.parentId;
             if (currentParentId) {
                 const parentTask = tasks.find(t => t.id === currentParentId);
                 onUpdateTask({ ...task, parentId: parentTask?.parentId });
             }
         } else {
-            // Indent
             const potentialParent = flattenedTasks[idx - 1].task;
             if (potentialParent.id !== task.parentId) {
                  onUpdateTask({ ...task, parentId: potentialParent.id });
@@ -137,7 +133,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
     }
   };
 
-  // --- Excel Export/Import ---
   const typeMap: Record<string, string> = { [LinkType.Real]: "实工作", [LinkType.Virtual]: "虚工作", [LinkType.Wavy]: "里程碑" };
   const reverseTypeMap: Record<string, LinkType> = { "实工作": LinkType.Real, "虚工作": LinkType.Virtual, "里程碑": LinkType.Wavy };
 
@@ -175,7 +170,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
         <div className="flex items-center gap-2">
             <h3 className="font-bold text-slate-700 text-sm">工程进度计划表</h3>
             <div className="h-4 w-px bg-slate-300 mx-1"></div>
-            <button onClick={() => setIsWpsModalOpen(true)} className="flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded hover:bg-emerald-100 transition-colors" title="导出到WPS编辑，或导入WPS文件">
+            <button onClick={() => setIsWpsModalOpen(true)} className="flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded hover:bg-emerald-100 transition-colors">
                 <FileSpreadsheet size={12} /> WPS 表格编辑
             </button>
         </div>
@@ -206,7 +201,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
               return (
               <tr key={task.id} className={`hover:bg-blue-50/30 group ${task.isCritical ? 'bg-red-50/10' : 'bg-white'} ${isSummary ? 'font-semibold bg-slate-50' : ''}`}>
                 <td className="p-0 border border-slate-300 h-8">
-                  <input type="text" value={task.id} onChange={(e) => onUpdateTask({ ...task, id: e.target.value })} className="w-full h-full bg-transparent px-1 text-center outline-none focus:bg-blue-50 focus:shadow-inner" />
+                  <input type="text" value={task.id} onChange={(e) => onUpdateTask({ ...task, id: e.target.value })} className="w-full h-full bg-transparent px-1 text-center outline-none focus:bg-blue-50" />
                 </td>
                 <td className="p-0 border border-slate-300 h-8">
                   <input type="text" value={task.zone || ''} onChange={(e) => onUpdateTask({ ...task, zone: e.target.value })} className="w-full h-full bg-transparent px-1 outline-none focus:bg-blue-50 text-slate-600" />
@@ -214,20 +209,15 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                 <td className="p-0 border border-slate-300 h-8">
                   <div className="flex items-center h-full" style={{ paddingLeft: level * 16 + 4 }}>
                     {isSummary ? (
-                        <button onClick={(e) => { e.stopPropagation(); toggleCollapse(task); }} className="mr-1 text-slate-500 hover:text-blue-600 focus:outline-none">
+                        <button onClick={(e) => { e.stopPropagation(); toggleCollapse(task); }} className="mr-1 text-slate-500 hover:text-blue-600">
                             {task.isCollapsed ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}
                         </button>
                     ) : <div className="w-3.5 mr-1" /> }
-                    {!isSummary && level > 0 && <CornerDownRight size={12} className="text-slate-300 mr-1 shrink-0" />}
                     <input type="text" value={task.name} onKeyDown={(e) => handleKeyDown(e, task)} onChange={(e) => onUpdateTask({ ...task, name: e.target.value })} className={`w-full h-full bg-transparent outline-none focus:bg-blue-50 ${isSummary ? 'text-slate-800' : 'text-slate-700'}`} />
                   </div>
                 </td>
                 <td className="p-0 border border-slate-300 h-8">
-                  {isSummary ? (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-500">{task.duration}</div>
-                  ) : (
-                      <input type="number" min="0" value={task.duration} onChange={(e) => onUpdateTask({ ...task, duration: parseInt(e.target.value) || 0 })} className="w-full h-full bg-transparent px-1 text-center outline-none focus:bg-blue-50" />
-                  )}
+                  <input type="number" min="0" value={task.duration} onChange={(e) => onUpdateTask({ ...task, duration: parseInt(e.target.value) || 0 })} className="w-full h-full bg-transparent px-1 text-center outline-none focus:bg-blue-50" disabled={!!isSummary} />
                 </td>
                 <td className="p-0 border border-slate-300 h-8">
                    <div className="w-full h-full flex items-center px-1 text-slate-500">
@@ -244,18 +234,18 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                    {!isSummary && (
                        <>
                            <input type="text" value={task.predecessors.join(',')} onChange={(e) => handlePredecessorsTextChange(task, e.target.value)} className="w-full h-full bg-transparent px-1 outline-none focus:bg-blue-50 text-slate-600 text-[11px]" />
-                           <button onClick={() => setLinkModalTaskId(task.id)} className="opacity-0 group-hover/pred:opacity-100 absolute right-0 top-0 bottom-0 bg-slate-100 hover:bg-blue-100 text-slate-400 hover:text-blue-600 px-1 border-l border-slate-200" title="选择紧前工作"><LinkIcon size={12} /></button>
+                           <button onClick={() => setLinkModalTaskId(task.id)} className="opacity-0 group-hover/pred:opacity-100 absolute right-0 top-0 bottom-0 bg-slate-100 hover:bg-blue-100 text-slate-400 hover:text-blue-600 px-1 border-l border-slate-200"><LinkIcon size={12} /></button>
                        </>
                    )}
                 </td>
                 <td className="p-0 border border-slate-300 h-8">
-                  <input type="date" value={formatDateForInput(task.earlyStart)} onChange={(e) => handleStartChange(task, e.target.value)} disabled={!!isSummary} className={`w-full h-full bg-transparent px-1 outline-none focus:bg-blue-50 text-xs text-slate-600 font-mono ${isSummary ? 'cursor-not-allowed text-slate-400' : ''}`} />
+                  <input type="date" value={formatDateForInput(task.earlyStart)} onChange={(e) => handleStartChange(task, e.target.value)} disabled={!!isSummary} className="w-full h-full bg-transparent px-1 outline-none focus:bg-blue-50 text-xs font-mono" />
                 </td>
                 <td className="p-0 border border-slate-300 h-8">
-                  <input type="date" value={formatDateForInput(displayEndOffset)} onChange={(e) => handleEndChange(task, e.target.value)} disabled={!!isSummary} className={`w-full h-full bg-transparent px-1 outline-none focus:bg-blue-50 text-xs text-slate-600 font-mono ${isSummary ? 'cursor-not-allowed text-slate-400' : ''}`} />
+                  <input type="date" value={formatDateForInput(displayEndOffset)} onChange={(e) => handleEndChange(task, e.target.value)} disabled={!!isSummary} className="w-full h-full bg-transparent px-1 outline-none focus:bg-blue-50 text-xs font-mono" />
                 </td>
                 <td className="p-0 border border-slate-300 h-8 text-center bg-white">
-                  <button onClick={() => onDeleteTask(task.id)} className="text-slate-300 hover:text-red-500 transition-colors h-full w-full flex items-center justify-center" title="删除工作"><Trash size={13} /></button>
+                  <button onClick={() => onDeleteTask(task.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash size={13} /></button>
                 </td>
               </tr>
             )})}
@@ -279,11 +269,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                           </div>
                       </div>
                       <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</div>
-                          <div className="flex-1"><h5 className="text-sm font-bold text-slate-700 mb-1">使用 WPS / Excel 编辑</h5></div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</div>
+                          <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</div>
                           <div className="flex-1">
                               <h5 className="text-sm font-bold text-slate-700 mb-1">上传修改后的文件</h5>
                               <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 transition group">
@@ -299,10 +285,10 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
 
       {linkModalTaskId && editingTask && (
         <div className="absolute inset-0 z-50 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-sm flex flex-col max-h-[80%] animate-in fade-in zoom-in duration-200 ring-1 ring-slate-900/5">
+          <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-sm flex flex-col max-h-[80%] animate-in fade-in zoom-in duration-200">
             <div className="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-lg">
               <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><LinkIcon size={14} className="text-blue-500"/> 设置紧前工作</h4>
-              <button onClick={() => setLinkModalTaskId(null)} className="text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
+              <button onClick={() => setLinkModalTaskId(null)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
             </div>
             <div className="p-2 flex-1 overflow-y-auto">
               {tasks.filter(t => t.id !== editingTask.id && !t.isSummary).map(t => {

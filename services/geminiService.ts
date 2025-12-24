@@ -3,8 +3,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Task, LinkType, AnalysisResult } from "../types";
 
 // Initialize Gemini Client
-// Note: In a real production app, API keys should be handled via backend proxy.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Always use the process.env.API_KEY directly as per instructions.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Helper: Wait function for backoff
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -70,8 +70,9 @@ export const parseScheduleFromText = async (textContext: string): Promise<{ task
       - 不要包含 Markdown 代码块标记。
       `;
 
+    // Use gemini-3-pro-preview for complex reasoning tasks as per instructions.
     const response = await generateContentWithRetry(
-      "gemini-2.5-flash",
+      'gemini-3-pro-preview',
       prompt,
       {
         responseMimeType: "application/json",
@@ -208,8 +209,9 @@ export const analyzeScheduleWithAI = async (tasks: Task[], criticalPath: string[
       4. 📊 **综合评分**：0-10分。
       `;
 
+    // Use gemini-3-pro-preview for complex text analysis tasks.
     const response = await generateContentWithRetry(
-      "gemini-2.5-flash",
+      'gemini-3-pro-preview',
       prompt,
       {}
     );
