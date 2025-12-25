@@ -1,4 +1,3 @@
-
 import React, { useRef, useState } from 'react';
 import { Project, Task } from '../types';
 import { FolderOpen, Plus, Save, Upload, Trash2, Undo, Redo, FileSpreadsheet, CloudUpload, Download, Clipboard, X } from 'lucide-react';
@@ -188,7 +187,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
       {showPasteModal && (
         <div className="absolute inset-0 z-50 bg-slate-900/10 backdrop-blur-[2px] flex items-center justify-center p-4">
            <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full h-full max-h-[300px] flex flex-col animate-in fade-in zoom-in duration-200">
-              <div className="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-lg">
+              <div className="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 rounded-t-lg">
                   <h4 className="font-bold text-slate-700 flex items-center gap-2 text-[11px] uppercase tracking-wider">
                       <Clipboard size={14} className="text-indigo-600"/> 粘贴 Excel 数据
                   </h4>
@@ -198,7 +197,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                   <textarea className="flex-1 w-full border border-slate-300 rounded p-2 text-[10px] font-mono resize-none focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="此处粘贴 Excel 复制的内容..." value={pasteContent} onChange={e => setPasteContent(e.target.value)} autoFocus />
               </div>
               <div className="p-3 border-t bg-slate-50 rounded-b-lg flex justify-end gap-2">
-                 <button onClick={() => handlePasteImport} disabled={!pasteContent.trim()} className="bg-indigo-600 text-white px-4 py-1.5 rounded text-[10px] font-bold hover:bg-indigo-700 shadow-sm transition uppercase disabled:opacity-50">
+                 {/* Fix: Changed () => handlePasteImport to handlePasteImport to ensure proper execution */}
+                 <button onClick={handlePasteImport} disabled={!pasteContent.trim()} className="bg-indigo-600 text-white px-4 py-1.5 rounded text-[10px] font-bold hover:bg-indigo-700 shadow-sm transition uppercase disabled:opacity-50">
                     识别生成
                  </button>
               </div>
