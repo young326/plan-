@@ -1,8 +1,7 @@
-
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import { Task, LinkType, Annotation } from '../types';
-import { ZoomIn, ZoomOut, Download, Type, BoxSelect, Settings, Calendar, MousePointer2, Layers, Flag, AlertTriangle, Star, CheckCircle, Edit3, X, Undo, Redo, Save, Image as ImageIcon, FileText, Code, FileCode, Globe, MoveVertical, ArrowDownUp, Share2, ChevronUp, ChevronDown, ListTree, Link as LinkIcon, Hash, FileJson, Clock, Move } from 'lucide-react';
+import { ZoomIn, ZoomOut, Download, Type, BoxSelect, Settings, Calendar, MousePointer2, Layers, Flag, AlertTriangle, Star, CheckCircle, Edit3, X, Undo, Redo, Save, Image as ImageIcon, FileText, Code, FileCode, Globe, MoveVertical, ArrowDownUp, Share2, ChevronUp, ChevronDown, ListTree, Link as LinkIcon, Hash, FileJson, Clock, Move, Maximize2, Minimize2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -20,6 +19,8 @@ interface NetworkDiagramProps {
   projectName?: string;
   zoneOrder?: string[];
   onZoneOrderChange?: (newOrder: string[]) => void;
+  isFocusMode?: boolean;
+  onToggleFocusMode?: () => void;
 }
 
 const STYLES = {
@@ -27,7 +28,7 @@ const STYLES = {
   gridOpacity: 0.2,
   zoneBg: '#f8fafc',
   zoneBorder: '#cbd5e1',
-  taskHeight: 100, 
+  taskHeight: 110, 
   nodeRadius: 6,
   criticalColor: '#ef4444',
   normalColor: '#1e293b',
@@ -53,7 +54,9 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
   projectStartDate,
   projectName,
   zoneOrder,
-  onZoneOrderChange
+  onZoneOrderChange,
+  isFocusMode,
+  onToggleFocusMode
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -104,7 +107,7 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
 
     sortedZones.forEach((zone, index) => {
       const zoneTasks = _tasks.filter(t => (t.zone || '默认区域') === zone);
-      zoneTasks.sort((a, b) => (a.earlyStart || 0) - (b.earlyStart || 0) || a.id.localeCompare(b.id));
+      zoneTasks.sort((a, b) => (a.earlyStart || 0) - (b.earlyStart || 0) || (b.duration - a.duration) || a.id.localeCompare(b.id));
 
       const lanes: number[] = [];
       const zoneStartRow = currentGlobalRow;
@@ -149,6 +152,8 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
     return result;
   };
 
+  const formatYYMMDD = d3.timeFormat("%y/%m/%d");
+
   const getWavyPath = (x1: number, x2: number, y: number) => {
     const width = x2 - x1;
     if (width <= 2) return ""; 
@@ -165,8 +170,16 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
     return path;
   };
 
-  const drawIntoSelection = (svg: d3.Selection<any, any, any, any>, xScale: d3.ScaleTime<number, number>, width: number, height: number, yOffset: number = 0) => {
+  const drawIntoSelection = (
+    svg: d3.Selection<any, any, any, any>, 
+    xScale: d3.ScaleTime<number, number>, 
+    width: number, 
+    height: number, 
+    yOffset: number = 0,
+    overrideMode?: TimeScaleMode
+  ) => {
       svg.selectAll("*").remove();
+      const currentMode = overrideMode || timeScaleMode;
       const contentHeight = Math.max(height, processedData.totalRows * STYLES.taskHeight + TITLE_HEIGHT + HEADER_HEIGHT + 100);
       
       const defs = svg.append("defs");
@@ -180,36 +193,34 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
       addMarker("arrow-summary", STYLES.summaryColor);
       processedData.zoneMeta.forEach((zone, i) => addMarker(`arrow-zone-${i}`, zone.color, 8, 4));
 
-      // 1. Static Layer: Title & Time Scale Ruler
       const staticLayer = svg.append("g").attr("class", "static-layer");
-      staticLayer.append("rect").attr("width", 20000).attr("height", TITLE_HEIGHT).attr("fill", "#ffffff");
+      staticLayer.append("rect").attr("width", width).attr("height", TITLE_HEIGHT).attr("fill", "#ffffff");
       staticLayer.append("text").attr("x", width / 2).attr("y", 40).attr("text-anchor", "middle").attr("font-size", "22px").attr("font-weight", "bold").attr("fill", "#1e293b").text(projectName || "工程网络计划");
-      staticLayer.append("rect").attr("x", 0).attr("y", TITLE_HEIGHT).attr("width", 20000).attr("height", HEADER_HEIGHT).attr("fill", "#f1f5f9").attr("stroke", "#cbd5e1").attr("stroke-width", 0.5);
+      staticLayer.append("rect").attr("x", 0).attr("y", TITLE_HEIGHT).attr("width", width).attr("height", HEADER_HEIGHT).attr("fill", "#f1f5f9").attr("stroke", "#cbd5e1").attr("stroke-width", 0.5);
 
       let xAxisTicks: Date[];
       let labelFormat: (d: Date) => string;
-      switch(timeScaleMode) {
+      switch(currentMode) {
         case 'year': xAxisTicks = xScale.ticks(d3.timeYear); labelFormat = d3.timeFormat("%Y年"); break;
         case 'month': xAxisTicks = xScale.ticks(d3.timeMonth); labelFormat = d3.timeFormat("%Y-%m"); break;
-        default: xAxisTicks = xScale.ticks(width / 120); labelFormat = d3.timeFormat("%Y-%m-%d");
+        default: xAxisTicks = xScale.ticks(width / 120); labelFormat = formatYYMMDD;
       }
 
       const ticksGroup = staticLayer.append("g").attr("transform", `translate(0, ${TITLE_HEIGHT})`);
       xAxisTicks.forEach(tick => {
           const xPos = xScale(tick);
-          if (xPos < 0 || xPos > 20000) return;
+          if (xPos < 0 || xPos > width) return;
           ticksGroup.append("line").attr("x1", xPos).attr("x2", xPos).attr("y1", 0).attr("y2", HEADER_HEIGHT).attr("stroke", "#94a3b8").attr("stroke-width", 0.5);
           ticksGroup.append("text").attr("x", xPos + 5).attr("y", HEADER_HEIGHT / 2).attr("dominant-baseline", "middle").attr("font-size", "10px").attr("fill", "#475569").text(labelFormat(tick));
       });
 
-      // 2. Content Layer
       const contentRoot = svg.append("g").attr("transform", `translate(0, ${TITLE_HEIGHT + HEADER_HEIGHT + yOffset})`);
       const bgGroup = contentRoot.append("g");
       const gridGroup = contentRoot.append("g");
       const zoneGroup = contentRoot.append("g");
       const linkGroup = contentRoot.append("g");
-      const nodeGroup = contentRoot.append("g");
       const textGroup = contentRoot.append("g");
+      const nodeGroup = contentRoot.append("g"); 
       const milestoneNodeGroup = contentRoot.append("g");
 
       xAxisTicks.forEach(tick => {
@@ -220,7 +231,7 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
       const rowHeight = STYLES.taskHeight;
       processedData.zoneMeta.forEach((zone, i) => {
         const yPos = zone.startRow * rowHeight; const h = zone.rowCount * rowHeight;
-        bgGroup.append("rect").attr("x", 0).attr("y", yPos).attr("width", 20000).attr("height", h).attr("fill", (i % 2 === 0) ? '#ffffff' : '#f8fafc');
+        bgGroup.append("rect").attr("x", 0).attr("y", yPos).attr("width", width).attr("height", h).attr("fill", (i % 2 === 0) ? '#ffffff' : '#f8fafc');
         const zoneLabel = zoneGroup.append("g").attr("transform", `translate(0, ${yPos})`);
         zoneLabel.append("rect").attr("width", 120).attr("height", h).attr("fill", (i % 2 === 0) ? '#ffffff' : '#f8fafc').attr("stroke", STYLES.zoneBorder);
         zoneLabel.append("text").attr("x", 60).attr("y", h/2).attr("text-anchor", "middle").attr("dominant-baseline", "middle").attr("font-weight", "bold").attr("font-size", "14px").attr("fill", zone.color).text(zone.name);
@@ -229,14 +240,13 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
       const taskStartPos = new Map<string, { x: number, y: number }>();
       const taskFinishPos = new Map<string, { x: number, y: number }>();
       const milestonePositions = new Set<string>();
-      const finishNodePositions = new Set<string>(); // 记录所有完成节点的位置
+      const finishNodePositions = new Set<string>(); 
 
-      // 阶段1：收集里程碑和完成节点位置
       processedData.tasks.forEach(item => {
         const task = item.task;
         const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0));
         const startX = xScale(addDays(projectStartDate, task.earlyStart || 0));
-        const y = (item.globalRowIndex * rowHeight) + (rowHeight * 0.7);
+        const y = (item.globalRowIndex * rowHeight) + (rowHeight * 0.55);
         
         if (task.type === LinkType.Wavy) {
             milestonePositions.add(`${Math.round(endX)},${Math.round(y)}`);
@@ -250,7 +260,7 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
         const task = item.task;
         const startX = xScale(addDays(projectStartDate, task.earlyStart || 0));
         const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0));
-        const y = (item.globalRowIndex * rowHeight) + (rowHeight * 0.7);
+        const y = (item.globalRowIndex * rowHeight) + (rowHeight * 0.55);
         const r = STYLES.nodeRadius;
 
         taskStartPos.set(task.id, { x: startX, y });
@@ -264,35 +274,66 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           const diamondGroup = milestoneNodeGroup.append("g").attr("transform", `translate(${endX}, ${y})`).attr("cursor", "pointer").on("click", () => handleOpenEdit(task));
           diamondGroup.append("path").attr("d", d3.symbol().type(d3.symbolDiamond).size(120)()).attr("fill", "#fff").attr("stroke", STYLES.criticalColor).attr("stroke-width", 2);
           textGroup.append("text").attr("x", endX).attr("y", y - 22).attr("text-anchor", "middle").attr("font-size", 12).attr("font-weight", "bold").attr("fill", STYLES.criticalColor).text(task.name);
-          const finishDateStr = addDays(projectStartDate, (task.earlyFinish || 1) - 1).toLocaleDateString();
-          textGroup.append("text").attr("x", endX).attr("y", y + 30).attr("text-anchor", "middle").attr("font-size", 11).attr("fill", STYLES.floatColor).text(finishDateStr);
+          const finishDateStr = formatYYMMDD(addDays(projectStartDate, (task.earlyFinish || 1) - 1));
+          textGroup.append("text").attr("x", endX).attr("y", y + 15).attr("text-anchor", "middle").attr("font-size", 10).attr("fill", STYLES.floatColor).text(finishDateStr);
         } else {
           if (task.duration > 0 || task.type !== LinkType.Virtual) {
               linkGroup.append("line").attr("x1", startX + r).attr("y1", y).attr("x2", endX - r).attr("y2", y).attr("stroke", color).attr("stroke-width", 1.8).attr("marker-end", task.isCritical ? "url(#arrow-critical)" : `url(#arrow-zone-${zoneIndex})`).attr("cursor", "pointer").on("click", () => handleOpenEdit(task));
+              
+              if (task.type === LinkType.Real && task.duration > 0) {
+                 textGroup.append("text")
+                  .attr("x", (startX + endX) / 2)
+                  .attr("y", y + 12) 
+                  .attr("text-anchor", "middle")
+                  .attr("font-size", "10px")
+                  .attr("font-weight", "600")
+                  .attr("fill", color)
+                  .text(`${task.duration}d`);
+              }
           }
           
           const startKey = `${Math.round(startX)},${Math.round(y)}`;
           const endKey = `${Math.round(endX)},${Math.round(y)}`;
-          
-          // 优化逻辑：如果该位置已有里程碑或紧前工作的完成节点，则不重复绘制起始圆圈和起始日期
           const hideStartNode = milestonePositions.has(startKey) || finishNodePositions.has(startKey);
 
           if (!hideStartNode) {
              nodeGroup.append("circle").attr("cx", startX).attr("cy", y).attr("r", r).attr("fill", "#fff").attr("stroke", "#000").attr("stroke-width", 1);
-             const startDateStr = addDays(projectStartDate, task.earlyStart || 0).toLocaleDateString();
-             textGroup.append("text").attr("x", startX).attr("y", y + 22).attr("text-anchor", "middle").attr("font-size", 11).attr("fill", "#64748b").text(startDateStr);
+             const startDateStr = formatYYMMDD(addDays(projectStartDate, task.earlyStart || 0));
+             textGroup.append("text").attr("x", startX).attr("y", y + 15).attr("text-anchor", "middle").attr("font-size", 9).attr("fill", "#64748b").text(startDateStr);
           }
           
-          // 结束节点及其日期正常绘制（除非是里程碑，已由 milestonePositions 处理）
           if (!milestonePositions.has(endKey)) {
              nodeGroup.append("circle").attr("cx", endX).attr("cy", y).attr("r", r).attr("fill", "#fff").attr("stroke", "#000").attr("stroke-width", 1);
-             const endDateStr = addDays(projectStartDate, (task.earlyFinish || 1) - 1).toLocaleDateString();
-             textGroup.append("text").attr("x", endX).attr("y", y + 22).attr("text-anchor", "middle").attr("font-size", 11).attr("fill", "#64748b").text(endDateStr);
+             const endDateStr = formatYYMMDD(addDays(projectStartDate, (task.earlyFinish || 1) - 1));
+             textGroup.append("text").attr("x", endX).attr("y", y + 15).attr("text-anchor", "middle").attr("font-size", 9).attr("fill", "#64748b").text(endDateStr);
           }
           
-          const textWidth = Math.max(endX - startX - 20, 100);
-          const fo = textGroup.append("foreignObject").attr("x", (startX + endX) / 2 - textWidth / 2).attr("y", y - 45).attr("width", textWidth).attr("height", 40).style("overflow", "visible").attr("cursor", "pointer").on("click", () => handleOpenEdit(task));
-          fo.append("xhtml:div").style("width", "100%").style("height", "100%").style("display", "flex").style("align-items", "flex-end").style("justify-content", "center").style("text-align", "center").style("font-size", "11px").style("color", color).style("line-height", "1.2").style("word-break", "break-all").style("background", "transparent").text(task.name);
+          const arrowLength = Math.abs(endX - startX);
+          const textWidth = Math.max(arrowLength, 60); 
+          const fo = textGroup.append("foreignObject")
+            .attr("x", (startX + endX) / 2 - textWidth / 2)
+            .attr("y", y - 48) 
+            .attr("width", textWidth)
+            .attr("height", 45)
+            .style("overflow", "visible")
+            .attr("cursor", "pointer")
+            .on("click", () => handleOpenEdit(task));
+            
+          fo.append("xhtml:div")
+            .style("width", "100%")
+            .style("height", "100%")
+            .style("display", "flex")
+            .style("align-items", "flex-end")
+            .style("justify-content", "center")
+            .style("text-align", "center")
+            .style("font-size", "11px")
+            .style("font-weight", "500")
+            .style("color", color)
+            .style("line-height", "1.1")
+            .style("word-break", "break-all")
+            .style("background", "transparent")
+            .style("padding", "0 1px") 
+            .text(task.name);
         }
       });
 
@@ -304,18 +345,19 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           const predFinish = taskFinishPos.get(predId);
           if (!predFinish) return;
           const startX = currentStart.x; const endXPred = predFinish.x; const yPred = predFinish.y; const yCurrent = currentStart.y; const r = STYLES.nodeRadius;
+          
           if (startX > endXPred + 2) {
              const wavyPath = getWavyPath(endXPred + r, startX - r, yPred);
-             if (wavyPath) linkGroup.append("path").attr("d", wavyPath).attr("fill", "none").attr("stroke", STYLES.floatColor).attr("stroke-width", 1.5);
+             if (wavyPath) linkGroup.append("path").attr("d", wavyPath).attr("fill", "none").attr("stroke", STYLES.floatColor).attr("stroke-width", 1.5).attr("stroke-opacity", 0.6);
           }
+          
           if (Math.abs(yPred - yCurrent) > 5) {
              const posKey = `${Math.round(startX)},${Math.round(yPred)}`;
-             // 逻辑转折点：若有里程碑或完成节点则合并
              if (!milestonePositions.has(posKey) && !finishNodePositions.has(posKey)) {
-                nodeGroup.append("circle").attr("cx", startX).attr("cy", yPred).attr("r", r).attr("fill", "#fff").attr("stroke", "#000").attr("stroke-width", 1);
+                nodeGroup.append("circle").attr("cx", startX).attr("cy", yPred).attr("r", r).attr("fill", "#fff").attr("stroke", "#000").attr("stroke-width", 0.8).attr("stroke-opacity", 0.5);
              }
              const vY1 = yPred + (yCurrent > yPred ? r : -r); const vY2 = yCurrent + (yCurrent > yPred ? -r : r);
-             linkGroup.append("line").attr("x1", startX).attr("y1", vY1).attr("x2", startX).attr("y2", vY2).attr("stroke", STYLES.virtualColor).attr("stroke-width", 1.2).attr("stroke-dasharray", "4,3").attr("marker-end", "url(#arrow-virtual)");
+             linkGroup.append("line").attr("x1", startX).attr("y1", vY1).attr("x2", startX).attr("y2", vY2).attr("stroke", STYLES.virtualColor).attr("stroke-width", 1).attr("stroke-dasharray", "4,3").attr("marker-end", "url(#arrow-virtual)").attr("stroke-opacity", 0.7);
           }
         });
       });
@@ -358,11 +400,12 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
   const generateDrawioXml = (xScale: d3.ScaleTime<number, number>, width: number, height: number): string => {
       let cellId = 2;
       const getNextId = () => (cellId++).toString();
-      
+      const contentHeight = Math.max(height, processedData.totalRows * STYLES.taskHeight + TITLE_HEIGHT + HEADER_HEIGHT + 100);
+
       let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <mxfile host="app.diagrams.net" modified="${new Date().toISOString()}" agent="IntelliPlan" version="21.0.0" type="device">
   <diagram id="diagram_1" name="工程网络计划">
-    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="20000" pageHeight="10000" math="0" shadow="0">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="${width}" pageHeight="${contentHeight}" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />`;
@@ -376,13 +419,17 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
       switch(timeScaleMode) {
         case 'year': xAxisTicks = xScale.ticks(d3.timeYear); labelFormat = d3.timeFormat("%Y年"); break;
         case 'month': xAxisTicks = xScale.ticks(d3.timeMonth); labelFormat = d3.timeFormat("%Y-%m"); break;
-        default: xAxisTicks = xScale.ticks(width / 120); labelFormat = d3.timeFormat("%Y-%m-%d");
+        default: xAxisTicks = xScale.ticks(width / 120); labelFormat = formatYYMMDD;
       }
 
       xAxisTicks.forEach(tick => {
           const x = xScale(tick);
+          if (x < 0 || x > width) return;
           xml += `<mxCell id="${getNextId()}" value="${labelFormat(tick)}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#94a3b8;" vertex="1" parent="1">
             <mxGeometry x="${x - 40}" y="${TITLE_HEIGHT + 20}" width="80" height="20" as="geometry" />
+          </mxCell>`;
+          xml += `<mxCell id="${getNextId()}" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingLeft=3;spacingRight=3;strokeColor=#cbd5e1;direction=south;opacity=20;dashed=1;" vertex="1" parent="1">
+            <mxGeometry x="${x}" y="${TITLE_HEIGHT}" width="10" height="${contentHeight}" as="geometry" />
           </mxCell>`;
       });
 
@@ -392,114 +439,116 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           const h = zone.rowCount * rowHeight;
           const bgColor = (i % 2 === 0) ? '#ffffff' : '#f8fafc';
           xml += `<mxCell id="${getNextId()}" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=${bgColor};strokeColor=#cbd5e1;opacity=50;" vertex="1" parent="1">
-            <mxGeometry x="0" y="${y}" width="20000" height="${h}" as="geometry" />
+            <mxGeometry x="0" y="${y}" width="${width}" height="${h}" as="geometry" />
           </mxCell>`;
           xml += `<mxCell id="${getNextId()}" value="${zone.name}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=#cbd5e1;fillColor=${bgColor};fontStyle=1;fontColor=${zone.color};" vertex="1" parent="1">
             <mxGeometry x="0" y="${y}" width="120" height="${h}" as="geometry" />
           </mxCell>`;
       });
 
-      const taskNodeMap = new Map<string, { start: string, end: string }>();
-      const milestoneCoordsExport = new Set<string>();
-      const finishNodeCoordsExport = new Set<string>();
+      const nodeCoordSet = new Map<string, { x: number, y: number, isMilestone: boolean }>();
 
       processedData.tasks.forEach(item => {
-        const task = item.task;
-        const startX = xScale(addDays(projectStartDate, task.earlyStart || 0));
-        const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0));
-        const y = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.7);
-        const posKey = `${Math.round(endX)},${Math.round(y)}`;
-        const startKey = `${Math.round(startX)},${Math.round(y)}`;
-        
-        if (task.type === LinkType.Wavy) {
-            milestoneCoordsExport.add(posKey);
-            milestoneCoordsExport.add(startKey);
-        } else {
-            finishNodeCoordsExport.add(posKey);
-        }
+          const task = item.task;
+          const startX = xScale(addDays(projectStartDate, task.earlyStart || 0));
+          const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0));
+          const y = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.55);
+          
+          const startKey = `${Math.round(startX)},${Math.round(y)}`;
+          const endKey = `${Math.round(endX)},${Math.round(y)}`;
+          
+          if (!nodeCoordSet.has(startKey)) nodeCoordSet.set(startKey, { x: startX, y, isMilestone: false });
+          if (!nodeCoordSet.has(endKey)) nodeCoordSet.set(endKey, { x: endX, y, isMilestone: task.type === LinkType.Wavy });
+          else if (task.type === LinkType.Wavy) nodeCoordSet.get(endKey)!.isMilestone = true;
+
+          const zoneIndex = processedData.zoneMeta.findIndex(z => z.name === task.zone);
+          const color = task.isCritical ? STYLES.criticalColor : (zoneIndex >= 0 ? processedData.zoneMeta[zoneIndex].color : STYLES.normalColor);
+
+          xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;endFill=1;html=1;strokeColor=${color};strokeWidth=1.8;verticalAlign=bottom;curved=0;" edge="1" parent="1">
+            <mxGeometry width="50" height="50" relative="1" as="geometry">
+              <mxPoint x="${startX}" y="${y}" as="sourcePoint" />
+              <mxPoint x="${endX}" y="${y}" as="targetPoint" />
+            </mxGeometry>
+          </mxCell>`;
+          
+          task.predecessors.forEach(predId => {
+              const predT = processedData.rawTasks.get(predId);
+              const predGlobal = processedData.tasks.find(t => t.task.id === predId);
+              if (!predT || !predGlobal) return;
+              const endXPred = xScale(addDays(projectStartDate, predT.earlyFinish || 0));
+              const yPred = (predGlobal.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.55);
+
+              if (startX > endXPred + 2) {
+                  const midX = (endXPred + startX) / 2;
+                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=none;html=1;strokeColor=#94a3b8;strokeWidth=1.2;curved=1;dashed=0;" edge="1" parent="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                      <mxPoint x="${endXPred}" y="${yPred}" as="sourcePoint" />
+                      <mxPoint x="${startX}" y="${yPred}" as="targetPoint" />
+                      <Array as="points">
+                        <mxPoint x="${(endXPred + midX) / 2}" y="${yPred - 6}" />
+                        <mxPoint x="${midX}" y="${yPred + 6}" />
+                        <mxPoint x="${(midX + startX) / 2}" y="${yPred - 6}" />
+                      </Array>
+                    </mxGeometry>
+                  </mxCell>`;
+              }
+              if (Math.abs(yPred - y) > 5) {
+                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;endFill=1;html=1;strokeColor=#64748b;strokeWidth=1.2;dashed=1;endSize=8;" edge="1" parent="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                      <mxPoint x="${startX}" y="${yPred}" as="sourcePoint" />
+                      <mxPoint x="${startX}" y="${y}" as="targetPoint" />
+                    </mxGeometry>
+                  </mxCell>`;
+                  const interKey = `${Math.round(startX)},${Math.round(yPred)}`;
+                  if (!nodeCoordSet.has(interKey)) nodeCoordSet.set(interKey, { x: startX, y: yPred, isMilestone: false });
+              }
+          });
+      });
+
+      nodeCoordSet.forEach((coord, key) => {
+          const id = getNextId();
+          if (coord.isMilestone) {
+              xml += `<mxCell id="${id}" value="" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef4444;strokeWidth=2;" vertex="1" parent="1">
+                <mxGeometry x="${coord.x - 8}" y="${coord.y - 8}" width="16" height="16" as="geometry" />
+              </mxCell>`;
+          } else {
+              xml += `<mxCell id="${id}" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="1">
+                <mxGeometry x="${coord.x - 6}" y="${coord.y - 6}" width="12" height="12" as="geometry" />
+              </mxCell>`;
+          }
       });
 
       processedData.tasks.forEach(item => {
           const task = item.task;
           const startX = xScale(addDays(projectStartDate, task.earlyStart || 0));
           const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0));
-          const y = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.7);
-          let sId = getNextId(); let eId = getNextId();
-          const startKey = `${Math.round(startX)},${Math.round(y)}`;
-          const endKey = `${Math.round(endX)},${Math.round(y)}`;
+          const y = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.55);
+          const zoneIndex = processedData.zoneMeta.findIndex(z => z.name === task.zone);
+          const color = task.isCritical ? STYLES.criticalColor : (zoneIndex >= 0 ? processedData.zoneMeta[zoneIndex].color : STYLES.normalColor);
 
-          if (task.type === LinkType.Wavy) {
-              xml += `<mxCell id="${eId}" value="" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef4444;strokeWidth=2;" vertex="1" parent="1">
-                <mxGeometry x="${endX - 8}" y="${y - 8}" width="16" height="16" as="geometry" />
-              </mxCell>`;
-              xml += `<mxCell id="${getNextId()}" value="${task.name}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#ef4444;fontStyle=1;whiteSpace=wrap;overflow=hidden;" vertex="1" parent="1">
-                <mxGeometry x="${endX - 50}" y="${y - 35}" width="100" height="25" as="geometry" />
-              </mxCell>`;
-              const finishDateStr = addDays(projectStartDate, (task.earlyFinish || 1) - 1).toLocaleDateString();
-              xml += `<mxCell id="${getNextId()}" value="${finishDateStr}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#94a3b8;" vertex="1" parent="1">
-                <mxGeometry x="${endX - 40}" y="${y + 15}" width="80" height="20" as="geometry" />
-              </mxCell>`;
-          } else {
-              // 导出逻辑：起始节点合并判断
-              const hideStart = milestoneCoordsExport.has(startKey) || finishNodeCoordsExport.has(startKey);
-              if (!hideStart) {
-                  xml += `<mxCell id="${sId}" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="1">
-                    <mxGeometry x="${startX - 6}" y="${y - 6}" width="12" height="12" as="geometry" />
-                  </mxCell>`;
-                  const startDateStr = addDays(projectStartDate, task.earlyStart || 0).toLocaleDateString();
-                  xml += `<mxCell id="${getNextId()}" value="${startDateStr}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#64748b;" vertex="1" parent="1">
-                    <mxGeometry x="${startX - 40}" y="${y + 12}" width="80" height="20" as="geometry" />
-                  </mxCell>`;
-              }
-              if (!milestoneCoordsExport.has(endKey)) {
-                  xml += `<mxCell id="${eId}" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="1">
-                    <mxGeometry x="${endX - 6}" y="${y - 6}" width="12" height="12" as="geometry" />
-                  </mxCell>`;
-                  const endDateStr = addDays(projectStartDate, (task.earlyFinish || 1) - 1).toLocaleDateString();
-                  xml += `<mxCell id="${getNextId()}" value="${endDateStr}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#64748b;" vertex="1" parent="1">
-                    <mxGeometry x="${endX - 40}" y="${y + 12}" width="80" height="20" as="geometry" />
-                  </mxCell>`;
-              }
-              const zoneIndex = processedData.zoneMeta.findIndex(z => z.name === task.zone);
-              const color = task.isCritical ? STYLES.criticalColor : (zoneIndex >= 0 ? processedData.zoneMeta[zoneIndex].color : STYLES.normalColor);
-              xml += `<mxCell id="${getNextId()}" value="${task.name}" style="text;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];strokeColor=none;fillColor=none;fontSize=11;whiteSpace=wrap;overflow=hidden;fontColor=${color};" vertex="1" parent="1">
-                <mxGeometry x="${(startX + endX) / 2 - 60}" y="${y - 45}" width="120" height="35" as="geometry" />
-              </mxCell>`;
-              xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;endFill=1;html=1;strokeColor=${color};strokeWidth=1.5;verticalAlign=bottom;" edge="1" parent="1" source="${sId}" target="${eId}">
-                <mxGeometry width="50" height="50" relative="1" as="geometry" />
+          const startDateStr = formatYYMMDD(addDays(projectStartDate, task.earlyStart || 0));
+          const endDateStr = formatYYMMDD(addDays(projectStartDate, (task.earlyFinish || 1) - 1));
+          
+          if (task.type !== LinkType.Wavy) {
+              xml += `<mxCell id="${getNextId()}" value="${startDateStr}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;fontColor=#64748b;" vertex="1" parent="1">
+                <mxGeometry x="${startX - 40}" y="${y + 10}" width="80" height="20" as="geometry" />
               </mxCell>`;
           }
-          taskNodeMap.set(task.id, { start: sId || '', end: eId || '' });
+          xml += `<mxCell id="${getNextId()}" value="${endDateStr}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;fontColor=#64748b;" vertex="1" parent="1">
+            <mxGeometry x="${endX - 40}" y="${y + 10}" width="80" height="20" as="geometry" />
+          </mxCell>`;
+
+          xml += `<mxCell id="${getNextId()}" value="${task.name}" style="text;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];strokeColor=none;fillColor=none;fontSize=11;whiteSpace=wrap;overflow=hidden;fontColor=${color};" vertex="1" parent="1">
+            <mxGeometry x="${(startX + endX) / 2 - 60}" y="${y - 18}" width="120" height="16" as="geometry" />
+          </mxCell>`;
+          
+          if (task.type === LinkType.Real && task.duration > 0) {
+             xml += `<mxCell id="${getNextId()}" value="${task.duration}d" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];strokeColor=none;fillColor=none;fontSize=10;fontColor=${color};fontStyle=1;" vertex="1" parent="1">
+                <mxGeometry x="${(startX + endX) / 2 - 20}" y="${y + 1}" width="40" height="14" as="geometry" />
+              </Alert>`;
+          }
       });
 
-      processedData.tasks.forEach(item => {
-          const task = item.task;
-          const taskEnds = taskNodeMap.get(task.id);
-          if (!taskEnds) return;
-          task.predecessors.forEach(predId => {
-              const predEnds = taskNodeMap.get(predId);
-              if (!predEnds) return;
-              const predT = processedData.rawTasks.get(predId);
-              const predGlobal = processedData.tasks.find(t => t.task.id === predId);
-              if (!predT || !predGlobal) return;
-              const startX = xScale(addDays(projectStartDate, task.earlyStart || 0));
-              const endXPred = xScale(addDays(projectStartDate, predT.earlyFinish || 0));
-              const yPred = (predGlobal.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.7);
-              const yCurrent = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.7);
-              if (startX > endXPred + 2) {
-                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=none;html=1;strokeColor=#94a3b8;strokeWidth=1;curved=1;dashed=1;dashPattern=1 1;" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${endXPred + 6}" y="${yPred}" as="sourcePoint" /><mxPoint x="${startX - 6}" y="${yPred}" as="targetPoint" /><Array as="points"><mxPoint x="${(endXPred + startX)/2}" y="${yPred - 8}" /><mxPoint x="${(endXPred + startX)/2}" y="${yPred + 8}" /></Array></mxGeometry></mxCell>`;
-              }
-              if (Math.abs(yPred - yCurrent) > 5) {
-                  const intermediateId = getNextId();
-                  const posKey = `${Math.round(startX)},${Math.round(yPred)}`;
-                  const hideIntermediate = milestoneCoordsExport.has(posKey) || finishNodeCoordsExport.has(posKey);
-                  if (!hideIntermediate) {
-                      xml += `<mxCell id="${intermediateId}" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#ffffff;strokeColor=#000000;opacity=30;" vertex="1" parent="1"><mxGeometry x="${startX - 4}" y="${yPred - 4}" width="8" height="8" as="geometry" /></mxCell>`;
-                  }
-                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;endFill=1;html=1;strokeColor=#64748b;strokeWidth=1.2;dashed=1;endSize=10;" edge="1" parent="1" source="${intermediateId}" target="${taskEnds.start}"><mxGeometry width="50" height="50" relative="1" as="geometry" /></mxCell>`;
-              }
-          });
-      });
       xml += `\n      </root>\n    </mxGraphModel>\n  </diagram>\n</mxfile>`;
       return xml;
   };
@@ -507,28 +556,33 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
   const handleExport = async (type: 'pdf' | 'png' | 'svg' | 'drawio') => {
       setShowExportMenu(false);
       const fileName = `${projectName || 'network-plan'}-${new Date().getTime()}`;
+      
+      const totalDays = processedData.projectDuration + 15;
+      const totalMonths = totalDays / 30;
+      const baseWidthPerMonth = 120; 
+      const fullWidth = Math.max(dimensions.width, 150 + totalMonths * baseWidthPerMonth);
+      const fullHeight = Math.max(dimensions.height, TITLE_HEIGHT + HEADER_HEIGHT + processedData.totalRows * STYLES.taskHeight + 100);
+      
+      const exSc = d3.scaleTime()
+        .domain([projectStartDate, addDays(projectStartDate, totalDays)])
+        .range([150, fullWidth - 50]);
+
       if (type === 'drawio') {
-          const totalDays = processedData.projectDuration + 15;
-          let viewWidth = Math.max(dimensions.width - 50, 1000);
-          if (timeScaleMode === 'month') viewWidth = viewWidth / 5;
-          if (timeScaleMode === 'year') viewWidth = viewWidth / 12;
-          const exportScale = d3.scaleTime().domain([projectStartDate, addDays(projectStartDate, totalDays)]).range([150, viewWidth]);
-          const xmlContent = generateDrawioXml(exportScale, viewWidth, 5000);
+          const xmlContent = generateDrawioXml(exSc, fullWidth, fullHeight);
           const blob = new Blob([xmlContent], { type: "text/xml" });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a'); link.href = url; link.download = `${fileName}.drawio`; link.click();
           return;
       }
-      const totalDays = processedData.projectDuration + 10;
-      const fullWidth = Math.max(dimensions.width, 120 + totalDays * 40 + 100);
-      const fullHeight = Math.max(dimensions.height, TITLE_HEIGHT + HEADER_HEIGHT + processedData.totalRows * STYLES.taskHeight + 100);
+
       try {
         const hDiv = document.createElement('div'); hDiv.style.position = 'absolute'; hDiv.style.top = '-9999px'; hDiv.style.left = '-9999px'; hDiv.style.width = `${fullWidth}px`; hDiv.style.height = `${fullHeight}px`; document.body.appendChild(hDiv);
         const tSvg = d3.select(hDiv).append("svg").attr("width", fullWidth).attr("height", fullHeight).attr("xmlns", "http://www.w3.org/2000/svg");
-        const exSc = d3.scaleTime().domain([projectStartDate, addDays(projectStartDate, totalDays)]).range([150, fullWidth - 50]);
-        drawIntoSelection(tSvg, exSc, fullWidth, fullHeight, 0);
+        
+        drawIntoSelection(tSvg, exSc, fullWidth, fullHeight, 0, 'month');
+
         if (type === 'png' || type === 'pdf') {
-            const canvas = await html2canvas(hDiv, { scale: 2, backgroundColor: '#ffffff' });
+            const canvas = await html2canvas(hDiv, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
             const imgData = canvas.toDataURL('image/png');
             if (type === 'png') { const link = document.createElement('a'); link.download = `${fileName}.png`; link.href = imgData; link.click(); } 
             else { const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [canvas.width, canvas.height] }); pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height); pdf.save(`${fileName}.pdf`); }
@@ -540,7 +594,7 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
              const link = document.createElement('a'); link.href = url; link.download = `${fileName}.svg`; link.click();
         }
         document.body.removeChild(hDiv);
-      } catch (e) { alert("导出失败"); }
+      } catch (e) { console.error(e); alert("导出失败"); }
   };
 
   useEffect(() => {
@@ -564,7 +618,7 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-slate-50 relative border-l border-slate-200">
-      <div className="h-10 border-b border-slate-200 bg-white flex items-center px-4 gap-3 shadow-sm z-10 shrink-0">
+      <div className="h-10 border-b border-slate-200 bg-white flex items-center px-4 gap-3 shadow-sm z-[20] shrink-0">
         <div className="flex items-center gap-2 text-slate-700"><Layers size={16} className="text-cyan-600"/><span className="font-bold text-sm">时标网络计划</span></div>
         <div className="h-4 w-px bg-slate-200 mx-1"></div>
         <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
@@ -576,17 +630,41 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
         <button onClick={() => setShowZoneModal(true)} className="p-1 flex items-center gap-1.5 text-xs text-slate-600 hover:text-blue-600 transition font-bold" title="调整区域显示顺序">
            <ArrowDownUp size={14} /> 区域管理
         </button>
+        
         <div className="flex-1"></div>
-        <div className="relative">
-          <button onClick={() => setShowExportMenu(!showExportMenu)} className="p-1 flex items-center gap-1 text-xs bg-cyan-600 text-white px-3 py-1.5 rounded hover:bg-cyan-700 shadow-sm transition"><Share2 size={14} /> 导出图纸</button>
-          {showExportMenu && (
-            <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 shadow-2xl rounded-lg overflow-hidden z-50 w-52 flex flex-col">
-              <button onClick={() => handleExport('png')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors">图片 (PNG)</button>
-              <button onClick={() => handleExport('pdf')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors">文档 (PDF)</button>
-              <button onClick={() => handleExport('svg')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors">矢量图 (SVG)</button>
-              <button onClick={() => handleExport('drawio')} className="px-4 py-3 text-xs text-emerald-700 font-bold hover:bg-emerald-50 flex items-center gap-3 transition-colors border-t border-slate-100"><FileJson size={14} /> draw.io (XML)</button>
+        
+        <div className="flex items-center gap-2">
+            <button 
+                onClick={onToggleFocusMode}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all border ${
+                    isFocusMode 
+                    ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+                title={isFocusMode ? "还原面板布局" : "全屏专注模式"}
+            >
+                {isFocusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                {isFocusMode ? "还原布局" : "专注模式"}
+            </button>
+            
+            <div className="h-4 w-px bg-slate-200 mx-1"></div>
+
+            <div className="relative">
+                <button 
+                    onClick={() => setShowExportMenu(!showExportMenu)} 
+                    className="p-1 flex items-center gap-1.5 text-xs bg-cyan-600 text-white px-3 py-1.5 rounded hover:bg-cyan-700 shadow-sm transition font-bold"
+                >
+                    <Share2 size={14} /> 导出图纸
+                </button>
+                {showExportMenu && (
+                    <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 shadow-2xl rounded-lg overflow-hidden z-[50] w-52 flex flex-col">
+                        <button onClick={() => handleExport('png')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full">图片 (PNG)</button>
+                        <button onClick={() => handleExport('pdf')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full">文档 (PDF)</button>
+                        <button onClick={() => handleExport('svg')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full">矢量图 (SVG)</button>
+                        <button onClick={() => handleExport('drawio')} className="px-4 py-3 text-xs text-emerald-700 font-bold hover:bg-emerald-50 flex items-center gap-3 transition-colors border-t border-slate-100 text-left w-full"><FileJson size={14} /> draw.io (XML)</button>
+                    </div>
+                )}
             </div>
-          )}
         </div>
       </div>
       <div ref={containerRef} className="flex-1 overflow-hidden relative bg-slate-50 cursor-grab active:cursor-grabbing">
@@ -596,7 +674,7 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
 
       {showZoneModal && (
           <div className="absolute inset-0 z-[60] bg-slate-900/20 backdrop-blur-[1px] flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-sm flex flex-col animate-in fade-in zoom-in duration-200 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-sm flex flex-col animate-in fade-in zoom-in duration-200 overflow-hidden">
                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
                       <div className="flex items-center gap-2">
                         <ArrowDownUp size={18} className="text-blue-600" />
@@ -651,16 +729,32 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
                 </div>
                 <div className="col-span-2 grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                    <div>
-                     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mb-1.5"><Calendar size={12}/> 开始日期</label>
-                     <input type="date" className="w-full border-2 border-slate-200 rounded-lg p-2.5 text-sm focus:border-blue-500 outline-none transition-all" value={addDays(projectStartDate, editingTask.earlyStart || 0).toISOString().split('T')[0]} onChange={e => { const target = new Date(e.target.value); const start = new Date(projectStartDate); start.setHours(0,0,0,0); const days = Math.round((target.getTime() - start.getTime()) / 86400000); const curFinish = editingTask.earlyFinish || (days + editingTask.duration); setEditingTask({ ...editingTask, constraintDate: days, earlyStart: days, duration: Math.max(0, curFinish - days) }); }} />
+                     <label className="flex items-center gap-1.5 text-xs font-bold text-blue-600 mb-1.5"><Calendar size={12}/> 开始日期</label>
+                     <input type="date" className="w-full border-2 border-blue-200 rounded-lg p-2.5 text-sm focus:border-blue-500 outline-none transition-all" value={addDays(projectStartDate, editingTask.earlyStart || 0).toISOString().split('T')[0]} 
+                      onChange={e => { 
+                        const target = new Date(e.target.value); 
+                        const start = new Date(projectStartDate); 
+                        start.setHours(0,0,0,0); 
+                        const days = Math.round((target.getTime() - start.getTime()) / 86400000); 
+                        const curFinish = editingTask.earlyFinish || (days + editingTask.duration); 
+                        setEditingTask({ ...editingTask, constraintDate: days, earlyStart: days, duration: Math.max(0, curFinish - days) }); 
+                      }} />
                    </div>
                    <div>
-                     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mb-1.5"><Calendar size={12}/> 完成日期</label>
-                     <input type="date" className="w-full border-2 border-slate-200 rounded-lg p-2.5 text-sm focus:border-blue-500 outline-none transition-all" value={addDays(projectStartDate, (editingTask.earlyFinish || 1) - 1).toISOString().split('T')[0]} onChange={e => { const target = new Date(e.target.value); const start = new Date(projectStartDate); start.setHours(0,0,0,0); const finish = Math.round((target.getTime() - start.getTime()) / 86400000) + 1; const curStart = editingTask.earlyStart || 0; setEditingTask({ ...editingTask, duration: Math.max(0, finish - curStart), earlyFinish: finish }); }} />
+                     <label className="flex items-center gap-1.5 text-xs font-bold text-blue-600 mb-1.5"><Calendar size={12}/> 完成日期</label>
+                     <input type="date" className="w-full border-2 border-blue-200 rounded-lg p-2.5 text-sm focus:border-blue-500 outline-none transition-all" value={addDays(projectStartDate, (editingTask.earlyFinish || 1) - 1).toISOString().split('T')[0]} 
+                      onChange={e => { 
+                        const target = new Date(e.target.value); 
+                        const start = new Date(projectStartDate); 
+                        start.setHours(0,0,0,0); 
+                        const finish = Math.round((target.getTime() - start.getTime()) / 86400000) + 1; 
+                        const curStart = editingTask.earlyStart || 0; 
+                        setEditingTask({ ...editingTask, duration: Math.max(0, finish - curStart), earlyFinish: finish }); 
+                      }} />
                    </div>
                    <div>
-                     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mb-1.5"><Hash size={12}/> 工期 (天)</label>
-                     <input type="number" min="0" className="w-full border-2 border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 transition-all" value={editingTask.duration} onChange={e => { const dur = parseInt(e.target.value) || 0; setEditingTask({ ...editingTask, duration: dur, earlyFinish: (editingTask.earlyStart || 0) + dur }); }} />
+                     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-400 mb-1.5"><Hash size={12}/> 工期 (自动计算)</label>
+                     <input type="number" min="0" className="w-full border-2 border-slate-100 rounded-lg p-2.5 text-sm outline-none bg-slate-50 text-slate-500" value={editingTask.duration} readOnly />
                    </div>
                 </div>
                 <div className="space-y-4">

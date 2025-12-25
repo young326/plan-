@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Task, LinkType } from '../types';
 import { Plus, Trash, AlertCircle, Link as LinkIcon, X, CheckSquare, Square, Folder, CornerDownRight, FileSpreadsheet, Download, Upload, ChevronRight, ChevronDown } from 'lucide-react';
@@ -73,9 +72,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
     return Math.round((target.getTime() - start.getTime()) / (1000 * 3600 * 24));
   };
 
-  /**
-   * 核心逻辑调整：修改开始时间 -> 固定完成时间，更新工期
-   */
   const handleStartChange = (task: Task, dateStr: string) => {
     if (!dateStr) {
       const { constraintDate, ...rest } = task;
@@ -84,17 +80,13 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
     }
     const newStart = getDaysFromDateStr(dateStr);
     const currentFinish = task.earlyFinish || (newStart + task.duration);
-    // 更新约束开始日期，并重新计算工期以保持完成日期基本不变
     const newDuration = Math.max(0, currentFinish - newStart);
     onUpdateTask({ ...task, constraintDate: newStart, duration: newDuration });
   };
 
-  /**
-   * 核心逻辑调整：修改完成时间 -> 固定开始时间，更新工期
-   */
   const handleEndChange = (task: Task, dateStr: string) => {
     if (!dateStr) return;
-    const selectedFinishOffset = getDaysFromDateStr(dateStr) + 1; // 结束日期通常包含当天
+    const selectedFinishOffset = getDaysFromDateStr(dateStr) + 1;
     const currentStart = task.earlyStart || 0;
     const newDuration = Math.max(0, selectedFinishOffset - currentStart);
     onUpdateTask({ ...task, duration: newDuration });
@@ -186,11 +178,11 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
               <th className="p-1 border border-slate-300 font-semibold w-12 text-center bg-slate-100">代号</th>
               <th className="p-1 border border-slate-300 font-semibold w-20 bg-slate-100">区域</th>
               <th className="p-1 border border-slate-300 font-semibold w-48 bg-slate-100">工作名称</th>
+              <th className="p-1 border border-slate-300 font-semibold w-24 bg-slate-100 text-blue-600">开始时间</th>
+              <th className="p-1 border border-slate-300 font-semibold w-24 bg-slate-100 text-blue-600">结束时间</th>
               <th className="p-1 border border-slate-300 font-semibold w-12 text-center bg-slate-100">工期</th>
               <th className="p-1 border border-slate-300 font-semibold w-16 bg-slate-100">类型</th>
               <th className="p-1 border border-slate-300 font-semibold w-24 bg-slate-100">紧前</th>
-              <th className="p-1 border border-slate-300 font-semibold w-24 bg-slate-100">开始</th>
-              <th className="p-1 border border-slate-300 font-semibold w-24 bg-slate-100">结束</th>
               <th className="p-1 border border-slate-300 font-semibold w-10 text-center bg-slate-100">操作</th>
             </tr>
           </thead>
@@ -217,7 +209,13 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                   </div>
                 </td>
                 <td className="p-0 border border-slate-300 h-8">
-                  <input type="number" min="0" value={task.duration} onChange={(e) => onUpdateTask({ ...task, duration: parseInt(e.target.value) || 0 })} className="w-full h-full bg-transparent px-1 text-center outline-none focus:bg-blue-50" disabled={!!isSummary} />
+                  <input type="date" value={formatDateForInput(task.earlyStart)} onChange={(e) => handleStartChange(task, e.target.value)} disabled={!!isSummary} className="w-full h-full bg-white px-1 outline-none focus:ring-1 focus:ring-blue-500 text-xs font-mono border-none" />
+                </td>
+                <td className="p-0 border border-slate-300 h-8">
+                  <input type="date" value={formatDateForInput(displayEndOffset)} onChange={(e) => handleEndChange(task, e.target.value)} disabled={!!isSummary} className="w-full h-full bg-white px-1 outline-none focus:ring-1 focus:ring-blue-500 text-xs font-mono border-none" />
+                </td>
+                <td className="p-0 border border-slate-300 h-8">
+                  <input type="number" min="0" value={task.duration} onChange={(e) => onUpdateTask({ ...task, duration: parseInt(e.target.value) || 0 })} className="w-full h-full bg-slate-50 px-1 text-center outline-none focus:bg-blue-50 text-slate-600" disabled={!!isSummary} />
                 </td>
                 <td className="p-0 border border-slate-300 h-8">
                    <div className="w-full h-full flex items-center px-1 text-slate-500">
@@ -237,12 +235,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                            <button onClick={() => setLinkModalTaskId(task.id)} className="opacity-0 group-hover/pred:opacity-100 absolute right-0 top-0 bottom-0 bg-slate-100 hover:bg-blue-100 text-slate-400 hover:text-blue-600 px-1 border-l border-slate-200"><LinkIcon size={12} /></button>
                        </>
                    )}
-                </td>
-                <td className="p-0 border border-slate-300 h-8">
-                  <input type="date" value={formatDateForInput(task.earlyStart)} onChange={(e) => handleStartChange(task, e.target.value)} disabled={!!isSummary} className="w-full h-full bg-transparent px-1 outline-none focus:bg-blue-50 text-xs font-mono" />
-                </td>
-                <td className="p-0 border border-slate-300 h-8">
-                  <input type="date" value={formatDateForInput(displayEndOffset)} onChange={(e) => handleEndChange(task, e.target.value)} disabled={!!isSummary} className="w-full h-full bg-transparent px-1 outline-none focus:bg-blue-50 text-xs font-mono" />
                 </td>
                 <td className="p-0 border border-slate-300 h-8 text-center bg-white">
                   <button onClick={() => onDeleteTask(task.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash size={13} /></button>
@@ -285,7 +277,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
 
       {linkModalTaskId && editingTask && (
         <div className="absolute inset-0 z-50 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-sm flex flex-col max-h-[80%] animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-sm flex flex-col max-h-[80%] animate-in fade-in zoom-in duration-200">
             <div className="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-lg">
               <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><LinkIcon size={14} className="text-blue-500"/> 设置紧前工作</h4>
               <button onClick={() => setLinkModalTaskId(null)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
