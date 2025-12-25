@@ -3,59 +3,135 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IntelliPlan AI - 智能网络计划</title>
+    <title>IntelliPlan AI - Liquid Glass Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      /* Custom scrollbar for technical look */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&display=swap');
+      
+      :root {
+        --glass-bg: rgba(255, 255, 255, 0.4);
+        --glass-border: rgba(255, 255, 255, 0.5);
+        --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+      }
+
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0f172a;
+        overflow: hidden;
+        margin: 0;
+        height: 100vh;
+      }
+
+      /* macOS 26 Liquid Mesh Background */
+      .mesh-bg {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background-color: #0f172a;
+        background-image: 
+          radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+          radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+          radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%), 
+          radial-gradient(at 0% 100%, hsla(225,39%,30%,1) 0, transparent 50%), 
+          radial-gradient(at 100% 100%, hsla(253,16%,7%,1) 0, transparent 50%);
+        filter: blur(100px);
+        transform: scale(1.2);
+        animation: mesh-flow 20s ease-in-out infinite alternate;
+      }
+
+      @keyframes mesh-flow {
+        0% { transform: scale(1.2) rotate(0deg); }
+        100% { transform: scale(1.4) rotate(5deg); }
+      }
+
+      /* Liquid Glass Utility Classes */
+      .glass-panel {
+        background: var(--glass-bg);
+        backdrop-filter: blur(50px) saturate(220%);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .glass-card {
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(30px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        transition: all 0.3s ease;
+      }
+
+      .glass-card:hover {
+        background: rgba(255, 255, 255, 0.35);
+        transform: translateY(-2px);
+      }
+
+      /* Webkit Adjustments */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #f1f5f9; 
+        background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: #94a3b8; 
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        backdrop-filter: blur(5px);
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #64748b; 
+        background: rgba(255, 255, 255, 0.4);
       }
-      .resize-handle-h {
-        cursor: col-resize;
-        width: 4px;
-        background-color: #cbd5e1;
-        transition: background-color 0.2s;
-        z-index: 20;
+
+      .liquid-button {
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
       }
-      .resize-handle-v {
-        cursor: row-resize;
-        height: 4px;
-        background-color: #cbd5e1;
-        transition: background-color 0.2s;
+      .liquid-button:active {
+        transform: scale(0.96);
       }
-      .resize-handle-h:hover, .resize-handle-v:hover {
-        background-color: #3b82f6;
+      .liquid-button::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(120deg, transparent, rgba(255,255,255,0.3), transparent);
+        transform: translateX(-100%);
+        transition: transform 0.6s;
+      }
+      .liquid-button:hover::after {
+        transform: translateX(100%);
+      }
+
+      input, select, textarea {
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        color: #1e293b !important;
+      }
+      input:focus {
+        border-color: rgba(59, 130, 246, 0.5) !important;
+        background: rgba(255, 255, 255, 0.2) !important;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
-    "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
-    "d3": "https://aistudiocdn.com/d3@^7.9.0",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs",
-    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.4",
-    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1"
-  }
-}
-</script>
-</head>
+    <script type="importmap">
+    {
+      "imports": {
+        "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+        "react": "https://aistudiocdn.com/react@^19.2.1",
+        "react/": "https://aistudiocdn.com/react@^19.2.1/",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+        "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
+        "d3": "https://aistudiocdn.com/d3@^7.9.0",
+        "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs",
+        "jspdf": "https://aistudiocdn.com/jspdf@^3.0.4",
+        "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1"
+      }
+    }
+    </script>
+  </head>
   <body>
+    <div class="mesh-bg"></div>
     <div id="root"></div>
   </body>
 </html>

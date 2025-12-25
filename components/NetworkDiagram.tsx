@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import { Task, LinkType, Annotation } from '../types';
@@ -29,7 +30,7 @@ const STYLES = {
   zoneBg: '#f8fafc',
   zoneBorder: '#cbd5e1',
   taskHeight: 110, 
-  nodeRadius: 8,
+  nodeRadius: 5, 
   criticalColor: '#ef4444',
   normalColor: '#1e293b',
   virtualColor: '#64748b',
@@ -342,7 +343,7 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
 
         if (isMilestone) {
           const diamondGroup = milestoneNodeGroup.append("g").attr("transform", `translate(${endX}, ${y})`).attr("cursor", "pointer").on("click", (e) => { e.stopPropagation(); handleOpenEdit(task); }).on("mouseenter", () => setHoveredTaskId(task.id)).on("mouseleave", () => setHoveredTaskId(null)).on("contextmenu", (e) => handleTaskContextMenu(e, task));
-          diamondGroup.append("path").attr("d", d3.symbol().type(d3.symbolDiamond).size(isSelected ? 300 : 150)()).attr("fill", isSelected ? STYLES.selectionColor : "#fff").attr("stroke", color).attr("stroke-width", isSelected ? 3 : 2).style("filter", isSelected ? "url(#selection-glow)" : "none");
+          diamondGroup.append("path").attr("d", d3.symbol().type(d3.symbolDiamond).size(isSelected ? 200 : 100)()).attr("fill", isSelected ? STYLES.selectionColor : "#fff").attr("stroke", color).attr("stroke-width", isSelected ? 3 : 2).style("filter", isSelected ? "url(#selection-glow)" : "none");
           textGroup.append("text").attr("x", endX).attr("y", y - 24).attr("text-anchor", "middle").attr("font-size", 12).attr("font-weight", isSelected ? "bold" : "600").attr("fill", color).text(task.name);
           const finishDateStr = formatYYMMDD(addDays(projectStartDate, (task.earlyFinish || 1) - 1));
           textGroup.append("text").attr("x", endX).attr("y", y + 18).attr("text-anchor", "middle").attr("font-size", 10).attr("fill", isSelected ? color : STYLES.floatColor).text(finishDateStr);
@@ -461,9 +462,9 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           const zoneIndex = processedData.zoneMeta.findIndex(z => z.name === task.zone);
           const color = task.isCritical ? STYLES.criticalColor : (zoneIndex >= 0 ? processedData.zoneMeta[zoneIndex].color : STYLES.normalColor);
           const isVirtual = task.type === LinkType.Virtual;
-          const nodeRad = (task.type === LinkType.Wavy ? 8 : 6);
+          const nodeRad = (task.type === LinkType.Wavy ? 6 : 4); 
           
-          xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;endFill=1;html=1;strokeColor=${color};strokeWidth=1.8;verticalAlign=bottom;curved=0;endSize=4.5;dashed=${isVirtual ? 1 : 0};" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${startX + 6}" y="${y}" as="sourcePoint" /><mxPoint x="${endX - nodeRad}" y="${y}" as="targetPoint" /></mxGeometry></mxCell>`;
+          xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;endFill=1;html=1;strokeColor=${color};strokeWidth=1.8;verticalAlign=bottom;curved=0;endSize=4.5;dashed=${isVirtual ? 1 : 0};" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${startX + 4}" y="${y}" as="sourcePoint" /><mxPoint x="${endX - nodeRad}" y="${y}" as="targetPoint" /></mxGeometry></mxCell>`;
           task.predecessors.forEach(predId => {
               const predT = processedData.rawTasks.get(predId); const predGlobal = processedData.tasks.find(t => t.task.id === predId);
               if (!predT || !predGlobal) return;
@@ -474,10 +475,10 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
                       pointsXml += `<mxPoint x="${curX}" y="${yPred - 4}" />`;
                       if (curX + step/2 < startX) { pointsXml += `<mxPoint x="${curX + step/2}" y="${yPred + 4}" />`; }
                   }
-                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=none;html=1;strokeColor=#94a3b8;strokeWidth=1.2;curved=1;dashed=0;" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${endXPred + 6}" y="${yPred}" as="sourcePoint" /><mxPoint x="${startX - 6}" y="${yPred}" as="targetPoint" /><Array as="points">${pointsXml}</Array></mxGeometry></mxCell>`;
+                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=none;html=1;strokeColor=#94a3b8;strokeWidth=1.2;curved=1;dashed=0;" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${endXPred + 4}" y="${yPred}" as="sourcePoint" /><mxPoint x="${startX - 4}" y="${yPred}" as="targetPoint" /><Array as="points">${pointsXml}</Array></mxGeometry></mxCell>`;
               }
               if (Math.abs(yPred - y) > 5) {
-                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;html=1;strokeColor=#64748b;strokeWidth=1.2;dashed=1;endSize=4.5;" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${startX}" y="${yPred + 6}" as="sourcePoint" /><mxPoint x="${startX}" y="${y - 6}" as="targetPoint" /></mxGeometry></mxCell>`;
+                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;html=1;strokeColor=#64748b;strokeWidth=1.2;dashed=1;endSize=4.5;" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${startX}" y="${yPred + 4}" as="sourcePoint" /><mxPoint x="${startX}" y="${y - 4}" as="targetPoint" /></mxGeometry></mxCell>`;
                   const interKey = `${Math.round(startX)},${Math.round(yPred)}`;
                   if (!nodeCoordSet.has(interKey)) nodeCoordSet.set(interKey, { x: startX, y: yPred, isMilestone: false });
               }
@@ -485,8 +486,8 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
       });
       nodeCoordSet.forEach((coord, key) => {
           const id = getNextId();
-          if (coord.isMilestone) { xml += `<mxCell id="${id}" value="" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef4444;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="${coord.x - 8}" y="${coord.y - 8}" width="16" height="16" as="geometry" /></mxCell>`; }
-          else { xml += `<mxCell id="${id}" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="${coord.x - 6}" y="${coord.y - 6}" width="12" height="12" as="geometry" /></mxCell>`; }
+          if (coord.isMilestone) { xml += `<mxCell id="${id}" value="" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef4444;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="${coord.x - 6}" y="${coord.y - 6}" width="12" height="12" as="geometry" /></mxCell>`; }
+          else { xml += `<mxCell id="${id}" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="${coord.x - 4}" y="${coord.y - 4}" width="8" height="8" as="geometry" /></mxCell>`; }
       });
       processedData.tasks.forEach(item => {
           const task = item.task; const startX = xScale(addDays(projectStartDate, task.earlyStart || 0)); const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0)); const y = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.55);
@@ -614,10 +615,10 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           </div>
       )}
       {editingTask && (
-        <div className="absolute inset-0 z-50 flex justify-end pointer-events-none" onClick={() => setEditingTask(null)}>
+        <div className="absolute inset-0 z-[120] flex justify-end pointer-events-none" onClick={() => setEditingTask(null)}>
           <div className="bg-white shadow-2xl border-l border-slate-200 w-full max-w-lg h-full flex flex-col relative animate-in slide-in-from-right duration-300 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50"><div className="flex items-center gap-3"><div className="p-2 bg-blue-100 rounded-lg text-blue-600"><Edit3 size={20}/></div><div><h4 className="font-bold text-slate-800 text-lg leading-tight">编辑工作属性</h4><p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Engineering Property Editor</p></div></div><button onClick={() => setEditingTask(null)} className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-full transition-all"><X size={20}/></button></div>
-             <div className="p-6 flex-1 overflow-y-auto space-y-6">
+             <div className="p-6 flex-1 overflow-y-auto space-y-6 custom-scrollbar pb-24">
                 <div className="grid grid-cols-4 gap-4"><div className="col-span-1"><label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mb-1.5"><Hash size={12}/> 工作代号</label><input className="w-full border-2 border-slate-100 rounded-lg p-2.5 text-sm bg-slate-50 text-slate-400 font-mono" value={editingTask.id} disabled /></div><div className="col-span-3"><label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mb-1.5"><Flag size={12}/> 工作名称</label><input className="w-full border-2 border-slate-200 rounded-lg p-2.5 text-sm font-semibold focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all" value={editingTask.name} onChange={e => setEditingTask({...editingTask, name: e.target.value})} placeholder="输入任务名称..." /></div></div>
                 <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                    <div><label className="flex items-center gap-1.5 text-xs font-bold text-blue-600 mb-1.5"><Calendar size={12}/> 开始日期</label><input type="date" className="w-full border-2 border-blue-200 rounded-lg p-2.5 text-sm focus:border-blue-500 outline-none transition-all cursor-pointer" value={toLocalYYYYMMDD(addDays(projectStartDate, editingTask.earlyStart || 0))} onChange={e => { if (!e.target.value) return; const days = getDaysFromDateStr(e.target.value); const finishOffset = (editingTask.earlyFinish || 1) - 1; setEditingTask({ ...editingTask, constraintDate: days, duration: Math.max(0, finishOffset - days + 1), earlyStart: days, earlyFinish: finishOffset + 1 }); }} /></div>
@@ -638,7 +639,14 @@ const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
                 </div>
                 <div><label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mb-1.5"><FileText size={12}/> 备注与详细说明</label><textarea className="w-full border-2 border-slate-200 rounded-lg p-3 text-sm h-32 resize-none outline-none focus:border-blue-500 transition-all" value={editingTask.description || ''} onChange={e => setEditingTask({...editingTask, description: e.target.value})} placeholder="关于本工作的说明..." /></div>
              </div>
-             <div className="p-4 border-t bg-slate-50 flex justify-end gap-3"><button onClick={() => setEditingTask(null)} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-lg transition-all">取消</button><button onClick={handleSaveEdit} className="bg-blue-600 text-white px-10 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all flex items-center gap-2 active:scale-95"><Save size={18} /> 应用更新</button></div>
+             
+             {/* 调整页脚按钮位置，增加右侧偏移避让 AI 助手按钮 */}
+             <div className="p-4 border-t bg-slate-50 flex justify-start pr-24 gap-3">
+                <button onClick={() => setEditingTask(null)} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-lg transition-all">取消</button>
+                <button onClick={handleSaveEdit} className="bg-blue-600 text-white px-10 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all flex items-center gap-2 active:scale-95">
+                   <Save size={18} /> 应用更新
+                </button>
+             </div>
           </div>
         </div>
       )}

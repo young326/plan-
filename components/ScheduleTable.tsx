@@ -1,10 +1,12 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Task, LinkType } from '../types';
-import { Plus, Trash, AlertCircle, Link as LinkIcon, X, CheckSquare, Square, Folder, CornerDownRight, FileSpreadsheet, Download, Upload, ChevronRight, ChevronDown, CalendarDays } from 'lucide-react';
+import { Plus, Trash, AlertCircle, Link as LinkIcon, X, CheckSquare, Square, Folder, CornerDownRight, FileSpreadsheet, Download, Upload, ChevronRight, ChevronDown, CalendarDays, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ScheduleTableProps {
   tasks: Task[];
+  isReadOnly?: boolean;
   onUpdateTask: (task: Task) => void;
   onAddTask: () => void;
   onDeleteTask: (id: string) => void;
@@ -12,7 +14,7 @@ interface ScheduleTableProps {
   projectStartDate: Date;
 }
 
-const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, onReplaceTasks, projectStartDate }) => {
+const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpdateTask, onAddTask, onDeleteTask, onReplaceTasks, projectStartDate }) => {
   const [linkModalTaskId, setLinkModalTaskId] = useState<string | null>(null);
   const [isWpsModalOpen, setIsWpsModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +50,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
   const toggleCollapse = (task: Task) => onUpdateTask({ ...task, isCollapsed: !task.isCollapsed });
 
   const togglePredecessor = (targetTask: Task, predId: string) => {
+    if (isReadOnly) return;
     const currentPreds = targetTask.predecessors || [];
     const newPreds = currentPreds.includes(predId) ? currentPreds.filter(id => id !== predId) : [...currentPreds, predId];
     onUpdateTask({ ...targetTask, predecessors: newPreds });
@@ -84,9 +87,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
     return Math.round((target.getTime() - start.getTime()) / (1000 * 3600 * 24));
   };
 
-  // 修改开始时间：更新约束日期，并联动重新计算工期（保持结束日期尽量不变或合法）
   const handleStartChange = (task: Task, dateStr: string) => {
-    if (!dateStr) return;
+    if (!dateStr || isReadOnly) return;
     const newStartOffset = getDaysFromDateStr(dateStr);
     const currentFinishOffset = (task.earlyFinish || 1) - 1;
     const newDuration = Math.max(0, currentFinishOffset - newStartOffset + 1);
@@ -97,9 +99,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
     });
   };
 
-  // 修改结束时间：联动重新计算工期（保持开始时间不变）
   const handleEndChange = (task: Task, dateStr: string) => {
-    if (!dateStr) return;
+    if (!dateStr || isReadOnly) return;
     const selectedFinishOffset = getDaysFromDateStr(dateStr);
     const currentStartOffset = task.earlyStart || 0;
     const newDuration = Math.max(0, selectedFinishOffset - currentStartOffset + 1);
@@ -107,17 +108,20 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
   };
 
   const handlePredecessorsTextChange = (task: Task, text: string) => {
+    if (isReadOnly) return;
     const preds = text.split(/[,，\s]+/).filter(id => id.trim() !== '');
     onUpdateTask({ ...task, predecessors: preds });
   };
 
   const handleTypeChange = (task: Task, newType: LinkType) => {
+    if (isReadOnly) return;
     let updates: Partial<Task> = { type: newType };
     if (newType === LinkType.Wavy && (task.duration === 0 || !task.duration)) updates.duration = 1;
     onUpdateTask({ ...task, ...updates });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, task: Task) => {
+    if (isReadOnly) return;
     if (e.key === 'Tab') {
       e.preventDefault();
       const idx = flattenedTasks.findIndex(item => item.task.id === task.id);
@@ -157,6 +161,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
   };
 
   const handleUploadExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isReadOnly) return;
     const file = e.target.files?.[0]; if (!file) return;
     try {
       const data = await file.arrayBuffer(); const workbook = XLSX.read(data);
@@ -184,12 +189,19 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
             <FileSpreadsheet size={12} /> Excel 导入/导出
           </button>
         </div>
-        <button onClick={onAddTask} className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700 shadow-sm">
-          <Plus size={12} /> 新建工作
-        </button>
+        {!isReadOnly && (
+            <button onClick={onAddTask} className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700 shadow-sm transition-all active:scale-95">
+              <Plus size={12} /> 新建工作
+            </button>
+        )}
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto relative">
+        {isReadOnly && (
+            <div className="sticky top-0 right-0 left-0 bg-amber-50 border-b border-amber-200 px-3 py-1 text-[10px] text-amber-700 flex items-center gap-2 z-[20]">
+                <Lock size={12} /> <span>只读权限：您不拥有此项目且所有者未开放协作权限，更改将不会被保存。</span>
+            </div>
+        )}
         <table className="w-full text-xs text-left border-collapse min-w-[850px] border border-slate-200 table-fixed">
           <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm text-slate-700 font-bold uppercase tracking-tight">
             <tr>
@@ -213,10 +225,10 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
               return (
                 <tr key={task.id} className={`hover:bg-blue-50/20 group transition-colors ${task.isCritical ? 'bg-red-50/10' : 'bg-white'} ${isSummaryTask ? 'font-semibold bg-slate-50' : ''}`}>
                   <td className="p-0 border border-slate-300 h-8">
-                    <input type="text" value={task.id} onChange={(e) => onUpdateTask({ ...task, id: e.target.value })} className="w-full h-full bg-transparent px-1 text-center outline-none focus:bg-white focus:ring-1 focus:ring-blue-400" />
+                    <input type="text" value={task.id} disabled={isReadOnly} onChange={(e) => onUpdateTask({ ...task, id: e.target.value })} className="w-full h-full bg-transparent px-1 text-center outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 disabled:cursor-not-allowed" />
                   </td>
                   <td className="p-0 border border-slate-300 h-8">
-                    <input type="text" value={task.zone || ''} onChange={(e) => onUpdateTask({ ...task, zone: e.target.value })} className="w-full h-full bg-transparent px-1 outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 text-slate-600" />
+                    <input type="text" value={task.zone || ''} disabled={isReadOnly} onChange={(e) => onUpdateTask({ ...task, zone: e.target.value })} className="w-full h-full bg-transparent px-1 outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 text-slate-600 disabled:cursor-not-allowed" />
                   </td>
                   <td className="p-0 border border-slate-300 h-8">
                     <div className="flex items-center h-full" style={{ paddingLeft: level * 16 + 4 }}>
@@ -225,16 +237,15 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                           {task.isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                         </button>
                       ) : <div className="w-3.5 mr-1" />}
-                      <input type="text" value={task.name} onKeyDown={(e) => handleKeyDown(e, task)} onChange={(e) => onUpdateTask({ ...task, name: e.target.value })} className={`w-full h-full bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 ${isSummaryTask ? 'text-slate-800' : 'text-slate-700'}`} />
+                      <input type="text" value={task.name} disabled={isReadOnly} onKeyDown={(e) => handleKeyDown(e, task)} onChange={(e) => onUpdateTask({ ...task, name: e.target.value })} className={`w-full h-full bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 disabled:cursor-not-allowed ${isSummaryTask ? 'text-slate-800' : 'text-slate-700'}`} />
                     </div>
                   </td>
-                  {/* 开始时间编辑单元格 */}
                   <td className="p-0 border border-slate-300 h-8">
                     <div 
-                      className={`relative w-full h-full flex items-center group/date ${isSummaryTask ? '' : 'cursor-pointer hover:bg-blue-50/50'}`}
+                      className={`relative w-full h-full flex items-center group/date ${isSummaryTask || isReadOnly ? '' : 'cursor-pointer hover:bg-blue-50/50'}`}
                       onClick={(e) => {
                         const input = e.currentTarget.querySelector('input');
-                        if (input && !isSummaryTask) {
+                        if (input && !isSummaryTask && !isReadOnly) {
                           try { (input as any).showPicker(); } catch (err) { input.focus(); }
                         }
                       }}
@@ -243,22 +254,21 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                         type="date"
                         value={formatDateForInput(startOffset)}
                         onChange={(e) => handleStartChange(task, e.target.value)}
-                        disabled={isSummaryTask}
-                        className={`w-full h-full bg-transparent pl-2 pr-6 outline-none focus:ring-1 focus:ring-blue-400 text-xs font-mono border-none pointer-events-auto ${isSummaryTask ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''}`}
+                        disabled={isSummaryTask || isReadOnly}
+                        className={`w-full h-full bg-transparent pl-2 pr-6 outline-none focus:ring-1 focus:ring-blue-400 text-xs font-mono border-none pointer-events-auto ${isSummaryTask || isReadOnly ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''}`}
                         onClick={(e) => e.stopPropagation()}
                       />
-                      {!isSummaryTask && (
+                      {!isSummaryTask && !isReadOnly && (
                         <CalendarDays size={12} className="absolute right-1.5 text-slate-300 group-hover/date:text-blue-500 pointer-events-none transition-colors" />
                       )}
                     </div>
                   </td>
-                  {/* 结束时间编辑单元格 */}
                   <td className="p-0 border border-slate-300 h-8">
                     <div 
-                      className={`relative w-full h-full flex items-center group/date ${isSummaryTask ? '' : 'cursor-pointer hover:bg-emerald-50/50'}`}
+                      className={`relative w-full h-full flex items-center group/date ${isSummaryTask || isReadOnly ? '' : 'cursor-pointer hover:bg-emerald-50/50'}`}
                       onClick={(e) => {
                         const input = e.currentTarget.querySelector('input');
-                        if (input && !isSummaryTask) {
+                        if (input && !isSummaryTask && !isReadOnly) {
                           try { (input as any).showPicker(); } catch (err) { input.focus(); }
                         }
                       }}
@@ -267,11 +277,11 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                         type="date"
                         value={formatDateForInput(finishOffset)}
                         onChange={(e) => handleEndChange(task, e.target.value)}
-                        disabled={isSummaryTask}
-                        className={`w-full h-full bg-transparent pl-2 pr-6 outline-none focus:ring-1 focus:ring-emerald-400 text-xs font-mono border-none pointer-events-auto ${isSummaryTask ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''}`}
+                        disabled={isSummaryTask || isReadOnly}
+                        className={`w-full h-full bg-transparent pl-2 pr-6 outline-none focus:ring-1 focus:ring-emerald-400 text-xs font-mono border-none pointer-events-auto ${isSummaryTask || isReadOnly ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''}`}
                         onClick={(e) => e.stopPropagation()}
                       />
-                      {!isSummaryTask && (
+                      {!isSummaryTask && !isReadOnly && (
                         <CalendarDays size={12} className="absolute right-1.5 text-slate-300 group-hover/date:text-emerald-500 pointer-events-none transition-colors" />
                       )}
                     </div>
@@ -282,7 +292,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                   <td className="p-0 border border-slate-300 h-8">
                     <div className="w-full h-full flex items-center px-1 text-slate-500">
                       {isSummaryTask ? "汇总" : (
-                        <select value={task.type} onChange={(e) => handleTypeChange(task, e.target.value as LinkType)} className="w-full h-full bg-transparent text-xs outline-none cursor-pointer border-none appearance-none focus:ring-1 focus:ring-blue-400">
+                        <select value={task.type} disabled={isReadOnly} onChange={(e) => handleTypeChange(task, e.target.value as LinkType)} className="w-full h-full bg-transparent text-xs outline-none cursor-pointer border-none appearance-none focus:ring-1 focus:ring-blue-400 disabled:cursor-not-allowed">
                           <option value={LinkType.Real}>实工作</option>
                           <option value={LinkType.Virtual}>虚工作</option>
                           <option value={LinkType.Wavy}>里程碑</option>
@@ -293,13 +303,15 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
                   <td className="p-0 border border-slate-300 h-8 relative group/pred">
                     {!isSummaryTask && (
                       <>
-                        <input type="text" value={task.predecessors.join(',')} onChange={(e) => handlePredecessorsTextChange(task, e.target.value)} className="w-full h-full bg-transparent px-1 outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 text-slate-600 text-[11px]" />
-                        <button onClick={() => setLinkModalTaskId(task.id)} className="opacity-0 group-hover/pred:opacity-100 absolute right-0 top-0 bottom-0 bg-slate-100 hover:bg-blue-100 text-slate-400 hover:text-blue-600 px-1 border-l border-slate-200"><LinkIcon size={12} /></button>
+                        <input type="text" value={task.predecessors.join(',')} disabled={isReadOnly} onChange={(e) => handlePredecessorsTextChange(task, e.target.value)} className="w-full h-full bg-transparent px-1 outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 text-slate-600 text-[11px] disabled:cursor-not-allowed" />
+                        {!isReadOnly && <button onClick={() => setLinkModalTaskId(task.id)} className="opacity-0 group-hover/pred:opacity-100 absolute right-0 top-0 bottom-0 bg-slate-100 hover:bg-blue-100 text-slate-400 hover:text-blue-600 px-1 border-l border-slate-200"><LinkIcon size={12} /></button>}
                       </>
                     )}
                   </td>
                   <td className="p-0 border border-slate-300 h-8 text-center bg-white">
-                    <button onClick={() => onDeleteTask(task.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash size={13} /></button>
+                    {!isReadOnly && (
+                        <button onClick={() => onDeleteTask(task.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash size={13} /></button>
+                    )}
                   </td>
                 </tr>
               )
@@ -317,11 +329,13 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, onUpdateTask, onAd
             </div>
             <div className="p-6 space-y-4">
               <button onClick={handleDownloadExcel} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 font-bold transition">导出为 Excel (.xlsx)</button>
-              <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 transition group">
-                <Upload size={24} className="text-slate-400 group-hover:text-emerald-500 mb-2" />
-                <p className="text-sm font-bold text-slate-600">点击上传 Excel 文件导入</p>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls" onChange={handleUploadExcel} />
-              </div>
+              {!isReadOnly && (
+                <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 transition group">
+                    <Upload size={24} className="text-slate-400 group-hover:text-emerald-500 mb-2" />
+                    <p className="text-sm font-bold text-slate-600">点击上传 Excel 文件导入</p>
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls" onChange={handleUploadExcel} />
+                </div>
+              )}
             </div>
           </div>
         </div>

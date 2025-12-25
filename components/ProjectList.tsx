@@ -1,11 +1,12 @@
 import React, { useRef, useState } from 'react';
-import { Project, Task } from '../types';
-import { FolderOpen, Plus, Save, Upload, Trash2, Undo, Redo, FileSpreadsheet, CloudUpload, Download, Clipboard, X } from 'lucide-react';
+import { Project, Task, User, ProjectVisibility } from '../types';
+import { FolderOpen, Plus, Save, Upload, Trash2, Undo, Redo, FileSpreadsheet, Clipboard, X, Shield, Lock, Eye, Users } from 'lucide-react';
 import { parseScheduleFromText } from '../services/geminiService';
 import * as XLSX from 'xlsx';
 
 interface ProjectListProps {
   projects: Project[];
+  currentUser: User;
   activeProjectId: string | null;
   onSelectProject: (id: string) => void;
   onAddProject: () => void;
@@ -13,6 +14,7 @@ interface ProjectListProps {
   onImportProject: (tasks: Task[], startDate?: number) => void;
   onLoadProject: (project: Project) => void;
   onRenameProject: (id: string, newName: string) => void;
+  onUpdateVisibility: (id: string, visibility: ProjectVisibility) => void;
   onSaveProject: () => void;
   onSaveToServer: () => void;
   onUndo: () => void;
@@ -26,6 +28,7 @@ interface ProjectListProps {
 
 const ProjectList: React.FC<ProjectListProps> = ({ 
   projects, 
+  currentUser,
   activeProjectId, 
   onSelectProject, 
   onAddProject, 
@@ -33,6 +36,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
   onImportProject,
   onLoadProject,
   onRenameProject,
+  onUpdateVisibility,
   onSaveProject,
   onSaveToServer,
   onUndo,
@@ -105,7 +109,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
   };
 
   const startEditing = (e: React.MouseEvent, project: Project) => {
-    e.stopPropagation(); setEditingId(project.id); setEditName(project.name);
+    e.stopPropagation(); 
+    if (currentUser.role !== 'admin' && project.ownerId !== currentUser.id) return;
+    setEditingId(project.id); 
+    setEditName(project.name);
   };
 
   const saveEdit = () => {
@@ -113,93 +120,135 @@ const ProjectList: React.FC<ProjectListProps> = ({
     setEditingId(null);
   };
 
+  const getVisibilityIcon = (v: ProjectVisibility) => {
+    switch(v) {
+      case 'private': return <Lock size={10} title="仅自己可见" />;
+      case 'public-read': return <Eye size={10} title="全员只读" />;
+      case 'public-edit': return <Users size={10} title="全员可编辑" />;
+    }
+  };
+
+  const toggleVisibility = (e: React.MouseEvent, project: Project) => {
+    e.stopPropagation();
+    if (currentUser.role !== 'admin' && project.ownerId !== currentUser.id) return;
+    
+    const cycle: ProjectVisibility[] = ['private', 'public-read', 'public-edit'];
+    const currentIdx = cycle.indexOf(project.visibility);
+    const nextVisibility = cycle[(currentIdx + 1) % cycle.length];
+    onUpdateVisibility(project.id, nextVisibility);
+  };
+
   return (
-    <div className="h-full flex flex-col bg-slate-50 relative border-r border-slate-200">
-      <div className="p-4 bg-slate-100 border-b border-slate-200 space-y-3">
-        <div className="flex justify-between items-center pr-6">
-          <h2 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">项目管理</h2>
-          <div className="flex gap-0.5">
-             <button onClick={onUndo} disabled={!canUndo} className="p-1 rounded text-slate-500 hover:bg-white hover:text-blue-600 disabled:opacity-20 transition" title="撤销">
-              <Undo size={12} />
+    <div className="h-full flex flex-col bg-transparent relative">
+      {/* Header section with light glass effect */}
+      <div className="p-5 bg-white/10 border-b border-white/20 space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em]">工程枢纽中心</h2>
+          <div className="flex gap-1">
+             <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded-lg text-slate-600 hover:bg-white/40 disabled:opacity-20 transition" title="撤销">
+              <Undo size={14} />
             </button>
-            <button onClick={onRedo} disabled={!canRedo} className="p-1 rounded text-slate-500 hover:bg-white hover:text-blue-600 disabled:opacity-20 transition" title="重做">
-              <Redo size={12} />
+            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded-lg text-slate-600 hover:bg-white/40 disabled:opacity-20 transition" title="重做">
+              <Redo size={14} />
             </button>
-            <div className="w-px h-3 bg-slate-300 mx-0.5 self-center"></div>
-             <button onClick={onSaveToServer} disabled={isSaving} className={`p-1 rounded transition ${isSaving ? 'text-blue-400 animate-pulse' : 'text-slate-500 hover:bg-white hover:text-blue-600'}`} title="保存">
-              <Save size={12} />
+            <div className="w-px h-4 bg-slate-400/20 mx-1 self-center"></div>
+             <button onClick={onSaveToServer} disabled={isSaving} className={`p-1.5 rounded-lg transition ${isSaving ? 'text-blue-500 animate-pulse' : 'text-slate-600 hover:bg-white/40 hover:text-blue-600'}`} title="保存到云端">
+              <Save size={14} />
             </button>
-             <button onClick={() => jsonInputRef.current?.click()} className="p-1 rounded text-slate-500 hover:bg-white hover:text-blue-600 transition" title="导入">
-              <Upload size={12} />
+             <button onClick={() => jsonInputRef.current?.click()} className="p-1.5 rounded-lg text-slate-600 hover:bg-white/40 hover:text-blue-600 transition" title="导入项目">
+              <Upload size={14} />
             </button>
             <input type="file" ref={jsonInputRef} onChange={handleJsonUpload} className="hidden" accept=".json" />
           </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={onAddProject} className="flex items-center justify-center gap-1 bg-blue-600 text-white p-2 rounded text-[10px] font-bold hover:bg-blue-700 transition shadow-sm uppercase">
-            <Plus size={12} /> 新建
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onAddProject} className="liquid-button flex items-center justify-center gap-2 bg-slate-900 text-white p-2.5 rounded-xl text-[10px] font-black hover:bg-slate-800 transition shadow-lg uppercase tracking-wider">
+            <Plus size={14} /> 新建项目
           </button>
-           <button onClick={() => setShowPasteModal(true)} className="flex items-center justify-center gap-1 bg-indigo-600 text-white p-2 rounded text-[10px] font-bold hover:bg-indigo-700 transition shadow-sm uppercase">
-            <Clipboard size={12} /> 粘贴
+           <button onClick={() => setShowPasteModal(true)} className="liquid-button flex items-center justify-center gap-2 bg-indigo-600 text-white p-2.5 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition shadow-lg uppercase tracking-wider">
+            <Clipboard size={14} /> 粘贴导入
           </button>
         </div>
-        <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-1 bg-white border border-slate-300 text-slate-700 p-1.5 rounded text-[10px] hover:bg-slate-50 transition shadow-sm font-bold uppercase">
-            <FileSpreadsheet size={12} /> 上传 EXCEL
+        <button onClick={() => fileInputRef.current?.click()} className="liquid-button w-full flex items-center justify-center gap-2 bg-white/40 border border-white/60 text-slate-900 p-2 rounded-xl text-[10px] hover:bg-white/60 transition shadow-sm font-black uppercase tracking-wider">
+            <FileSpreadsheet size={14} /> Excel 智能审计导入
         </button>
         <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".xlsx,.xls,.csv,.txt" />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
         {projects.length === 0 && (
-          <div className="text-center text-slate-400 text-xs mt-10">暂无项目</div>
+          <div className="text-center text-slate-500 text-xs mt-10 font-bold opacity-50">暂无可查看的项目卡片</div>
         )}
-        {projects.map((project) => (
-          <div
-            key={project.id}
-            onClick={() => onSelectProject(project.id)}
-            className={`group flex items-center justify-between p-3 mb-2 rounded cursor-pointer border transition-all select-none ${
-              activeProjectId === project.id ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-transparent hover:border-slate-200'
-            }`}
-          >
-            <div className="flex items-center gap-2 overflow-hidden flex-1">
-              <FolderOpen size={14} className={`shrink-0 ${activeProjectId === project.id ? "text-blue-500" : "text-slate-400"}`} />
-              <div className="flex flex-col truncate flex-1">
-                {editingId === project.id ? (
-                  <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} onBlur={saveEdit} onKeyDown={(e) => e.key === 'Enter' && saveEdit()} onClick={(e) => e.stopPropagation()} autoFocus className="text-xs font-medium border border-blue-400 rounded px-1 py-0.5 outline-none w-full" />
-                ) : (
-                  <span className={`text-xs font-bold truncate ${activeProjectId === project.id ? 'text-blue-900' : 'text-slate-700'}`} onDoubleClick={(e) => startEditing(e, project)}>
-                    {project.name}
-                  </span>
-                )}
-                <span className="text-[9px] text-slate-400">
-                  {new Date(project.lastModified).toLocaleDateString()}
-                </span>
+        {projects.map((project) => {
+          const isOwner = project.ownerId === currentUser.id;
+          const isAdmin = currentUser.role === 'admin';
+          const canManage = isOwner || isAdmin;
+
+          return (
+            <div
+              key={project.id}
+              onClick={() => onSelectProject(project.id)}
+              className={`group glass-card flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all select-none border-white/50 ${
+                activeProjectId === project.id ? 'ring-2 ring-blue-500/50 bg-white/50 shadow-xl scale-[1.02]' : 'hover:scale-[1.01]'
+              }`}
+            >
+              <div className="flex items-center gap-4 overflow-hidden flex-1">
+                <div className="relative">
+                    <div className={`p-2.5 rounded-xl ${activeProjectId === project.id ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-white/40 text-slate-500"}`}>
+                        <FolderOpen size={18} />
+                    </div>
+                    {isOwner && <div className="absolute -top-1 -right-1 bg-emerald-500 w-3 h-3 rounded-full border-2 border-white shadow-sm"></div>}
+                </div>
+                <div className="flex flex-col truncate flex-1">
+                  {editingId === project.id ? (
+                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} onBlur={saveEdit} onKeyDown={(e) => e.key === 'Enter' && saveEdit()} onClick={(e) => e.stopPropagation()} autoFocus className="text-xs font-black border-2 border-blue-400 rounded-lg px-2 py-1 outline-none w-full bg-white/80" />
+                  ) : (
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        <span className={`text-xs font-black truncate ${activeProjectId === project.id ? 'text-slate-900' : 'text-slate-700'}`} onDoubleClick={(e) => startEditing(e, project)}>
+                            {project.name}
+                        </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 mt-1 text-[9px] text-slate-500 font-bold">
+                    <span className="flex items-center gap-1 bg-white/30 px-2 py-0.5 rounded-full border border-white/40">
+                        {isOwner ? '我的' : (project.ownerName || '匿名')}
+                    </span>
+                    <button 
+                        onClick={(e) => toggleVisibility(e, project)}
+                        className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-white/40 transition-all ${canManage ? 'hover:bg-blue-500 hover:text-white' : ''}`}
+                    >
+                        {getVisibilityIcon(project.visibility)}
+                        <span className="capitalize">{project.visibility.split('-').pop()}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
+              {canManage && (
+                <button onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); }} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-500 hover:bg-white/60 rounded-xl transition-all">
+                  <Trash2 size={16} />
+                </button>
+              )}
             </div>
-            <button onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 p-1 transition-opacity">
-              <Trash2 size={12} />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
       
       {showPasteModal && (
-        <div className="absolute inset-0 z-50 bg-slate-900/10 backdrop-blur-[2px] flex items-center justify-center p-4">
-           <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full h-full max-h-[300px] flex flex-col animate-in fade-in zoom-in duration-200">
-              <div className="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 rounded-t-lg">
-                  <h4 className="font-bold text-slate-700 flex items-center gap-2 text-[11px] uppercase tracking-wider">
-                      <Clipboard size={14} className="text-indigo-600"/> 粘贴 Excel 数据
+        <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4">
+           <div className="glass-panel rounded-3xl shadow-2xl border-white/50 w-full h-full max-h-[350px] flex flex-col animate-in fade-in zoom-in duration-300">
+              <div className="p-5 border-b border-white/20 flex justify-between items-center bg-white/20">
+                  <h4 className="font-black text-slate-800 flex items-center gap-3 text-xs uppercase tracking-[0.2em]">
+                      <Clipboard size={18} className="text-indigo-600"/> 粘贴 EXCEL 原始数据
                   </h4>
-                  <button onClick={() => setShowPasteModal(false)} className="text-slate-400 hover:text-slate-600 transition"><X size={16}/></button>
+                  <button onClick={() => setShowPasteModal(false)} className="p-2 hover:bg-white/40 rounded-full transition-colors"><X size={20}/></button>
               </div>
-              <div className="flex-1 p-2 flex flex-col">
-                  <textarea className="flex-1 w-full border border-slate-300 rounded p-2 text-[10px] font-mono resize-none focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="此处粘贴 Excel 复制的内容..." value={pasteContent} onChange={e => setPasteContent(e.target.value)} autoFocus />
+              <div className="flex-1 p-4 flex flex-col">
+                  <textarea className="flex-1 w-full bg-white/40 border-2 border-white/60 rounded-2xl p-4 text-[11px] font-mono resize-none focus:border-indigo-500 outline-none transition-all placeholder:text-slate-500" placeholder="在此粘贴 Excel 表格数据，AI 将自动分析其逻辑结构..." value={pasteContent} onChange={e => setPasteContent(e.target.value)} autoFocus />
               </div>
-              <div className="p-3 border-t bg-slate-50 rounded-b-lg flex justify-end gap-2">
-                 {/* Fix: Changed () => handlePasteImport to handlePasteImport to ensure proper execution */}
-                 <button onClick={handlePasteImport} disabled={!pasteContent.trim()} className="bg-indigo-600 text-white px-4 py-1.5 rounded text-[10px] font-bold hover:bg-indigo-700 shadow-sm transition uppercase disabled:opacity-50">
-                    识别生成
+              <div className="p-5 border-t border-white/20 bg-white/10 rounded-b-3xl flex justify-end gap-3">
+                 <button onClick={handlePasteImport} disabled={!pasteContent.trim()} className="liquid-button bg-indigo-600 text-white px-8 py-3 rounded-2xl text-[11px] font-black hover:bg-indigo-700 shadow-xl shadow-indigo-500/20 transition uppercase disabled:opacity-50">
+                    立即识别并生成图纸
                  </button>
               </div>
            </div>

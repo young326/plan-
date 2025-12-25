@@ -3,14 +3,25 @@
 
 export enum LinkType {
   Real = 'Real',
-  Virtual = 'Virtual', // Dashed line
-  Wavy = 'Wavy' // Usually implies wait/buffer, technically standard AOD uses dashed for virtual
+  Virtual = 'Virtual', 
+  Wavy = 'Wavy'
+}
+
+export type ProjectVisibility = 'private' | 'public-read' | 'public-edit';
+
+export interface User {
+  id: string;
+  username: string;
+  phone: string;
+  role: 'admin' | 'editor' | 'viewer';
+  avatar?: string;
+  createdAt?: number; // 注册时间
 }
 
 export interface Annotation {
   id: string;
   type: 'text' | 'icon';
-  content: string; // text content or icon name
+  content: string;
   x: number;
   y: number;
   style?: {
@@ -23,18 +34,18 @@ export interface Annotation {
 export interface Task {
   id: string;
   name: string;
-  duration: number; // in days
-  predecessors: string[]; // IDs of preceding tasks
+  duration: number;
+  predecessors: string[];
   type: LinkType;
-  zone?: string; // Partition/Zone
+  zone?: string;
   description?: string;
-  parentId?: string; // For hierarchical grouping
-  isCollapsed?: boolean; // UI state for parent tasks
-  constraintDate?: number; // Manual start constraint (Start No Earlier Than)
-  labelOffsetX?: number; // Horizontal offset for the task label
-  manualLane?: number; // Manual vertical lane index within the zone (0-based)
+  parentId?: string;
+  isCollapsed?: boolean;
+  constraintDate?: number;
+  labelOffsetX?: number;
+  manualLane?: number;
   
-  // Calculated fields for Critical Path Method (CPM)
+  // Calculated fields
   earlyStart?: number;
   earlyFinish?: number;
   lateStart?: number;
@@ -42,35 +53,29 @@ export interface Task {
   totalFloat?: number;
   freeFloat?: number;
   isCritical?: boolean;
-  isSummary?: boolean; // Computed property
+  isSummary?: boolean;
 }
 
 export interface Project {
   id: string;
   name: string;
   lastModified: number;
-  startDate?: number; // Project start timestamp (Local Midnight)
+  startDate?: number;
   tasks: Task[];
-  annotations?: Annotation[]; // Added annotations support
+  annotations?: Annotation[];
   description?: string;
-  zoneOrder?: string[]; // Custom order for zones
+  zoneOrder?: string[];
+  collaborators?: User[];
+  
+  // Permission fields
+  ownerId: string;
+  ownerName: string;
+  visibility: ProjectVisibility;
 }
 
-export interface NetworkNode {
-  id: number;
-  x?: number;
-  y?: number;
-  time?: number; // Logical time for X-axis
-}
-
-export interface NetworkLink {
-  source: number; // Node ID
-  target: number; // Node ID
-  task: Task;
-}
-
-export interface AnalysisResult {
-  criticalPath: string[];
-  suggestions: string;
-  estimatedDuration: number;
+export interface SyncMessage {
+  type: 'UPDATE_PROJECT' | 'USER_JOIN' | 'CURSOR_MOVE';
+  projectId: string;
+  payload: any;
+  senderId: string;
 }
