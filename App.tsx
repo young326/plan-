@@ -3,7 +3,6 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Project, Task, LinkType, Annotation, User, SyncMessage, ProjectVisibility } from './types';
 import ProjectList from './components/ProjectList';
 import ScheduleTable from './components/ScheduleTable';
-// Fix: Use named import for NetworkDiagram as it is not exported as default
 import { NetworkDiagram } from './components/NetworkDiagram';
 import AIAssistant from './components/AIAssistant';
 import Auth from './components/Auth';
@@ -13,19 +12,19 @@ import { Undo, Redo, CloudCheck, Loader2, ChevronLeft, PanelLeftOpen, Columns, S
 
 const SYNC_CHANNEL = 'intelliplan_sync_v1';
 const CURRENT_VERSION = 'v2.6.0';
-const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2小时毫秒数
 
 const App: React.FC = () => {
-  // 临时逻辑：默认直接登录管理员账号
+  // 从本地存储初始化用户，如果不存在则为 null (显示登录页)
   const [user, setUser] = useState<User | null>(() => {
-    return {
-      id: '18663187732',
-      username: '系统管理员 (调试模式)',
-      phone: '18663187732',
-      role: 'admin',
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=admin`,
-      createdAt: Date.now()
-    };
+    try {
+      const savedUser = localStorage.getItem('intelliplan_user');
+      if (savedUser) {
+        return JSON.parse(savedUser);
+      }
+    } catch (e) {
+      console.error("Failed to parse user from local storage", e);
+    }
+    return null;
   });
 
   const initialProject: Project = { 
@@ -156,15 +155,23 @@ const App: React.FC = () => {
   }, [user, activeProject]);
 
   const handleExportFullProject = () => {
-    const data = JSON.stringify(activeProject, null, 2);
+    // 导出包含所有元数据的数据包
+    const exportData = {
+      ...activeProject,
+      exportDate: new Date().toISOString(),
+      version: CURRENT_VERSION,
+      system: 'IntelliPlan AI'
+    };
+    const data = JSON.stringify(exportData, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${activeProject.name}_Backup.itp`;
+    a.download = `${activeProject.name}_${new Date().toISOString().split('T')[0]}.itp`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const calculatedTasks = useMemo(() => {
@@ -243,11 +250,14 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // 直接设为 null 即可返回 Auth 界面（如果需要）
+    localStorage.removeItem('intelliplan_user');
     setUser(null);
   };
 
-  if (!user) return <Auth onLogin={setUser} />;
+  if (!user) return <Auth onLogin={(u) => {
+    localStorage.setItem('intelliplan_user', JSON.stringify(u));
+    setUser(u);
+  }} />;
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden p-3 sm:p-5 gap-3 sm:gap-5">
@@ -375,6 +385,7 @@ const App: React.FC = () => {
             onRenameProject={(id, name) => updateProjectsWithHistory(projects.map(p => p.id === id ? {...p, name} : p))}
             onUpdateVisibility={handleUpdateVisibility}
             onSaveProject={handleExportFullProject}
+            onExportProject={handleExportFullProject}
             onSaveToServer={() => { setIsSaving(true); setTimeout(() => { setIsSaving(false); setShowSaveSuccess(true); setTimeout(() => setShowSaveSuccess(false), 2000); }, 600); }}
             onUndo={() => historyIndex > 0 && setHistoryIndex(historyIndex - 1)}
             onRedo={() => historyIndex < history.length - 1 && setHistoryIndex(historyIndex + 1)}

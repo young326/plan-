@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Project, Task, User, ProjectVisibility } from '../types';
-import { FolderOpen, Plus, Save, Upload, Trash2, Undo, Redo, FileSpreadsheet, Clipboard, X, Shield, Lock, Eye, Users } from 'lucide-react';
+import { FolderOpen, Plus, Save, Upload, Trash2, Undo, Redo, FileSpreadsheet, Clipboard, X, Shield, Lock, Eye, Users, FileJson, Download } from 'lucide-react';
 import { parseScheduleFromText } from '../services/geminiService';
 import * as XLSX from 'xlsx';
 
@@ -16,6 +16,7 @@ interface ProjectListProps {
   onRenameProject: (id: string, newName: string) => void;
   onUpdateVisibility: (id: string, visibility: ProjectVisibility) => void;
   onSaveProject: () => void;
+  onExportProject: () => void;
   onSaveToServer: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -38,6 +39,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
   onRenameProject,
   onUpdateVisibility,
   onSaveProject,
+  onExportProject,
   onSaveToServer,
   onUndo,
   onRedo,
@@ -122,7 +124,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
   const getVisibilityIcon = (v: ProjectVisibility) => {
     switch(v) {
-      // Fix: Removed 'title' prop from Lucide components as it is not part of LucideProps. Tooltips are handled by the parent button's title.
       case 'private': return <Lock size={10} />;
       case 'public-read': return <Eye size={10} />;
       case 'public-edit': return <Users size={10} />;
@@ -156,10 +157,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
              <button onClick={onSaveToServer} disabled={isSaving} className={`p-1.5 rounded-lg transition ${isSaving ? 'text-blue-500 animate-pulse' : 'text-slate-600 hover:bg-white/40 hover:text-blue-600'}`} title="保存到云端">
               <Save size={14} />
             </button>
-             <button onClick={() => jsonInputRef.current?.click()} className="p-1.5 rounded-lg text-slate-600 hover:bg-white/40 hover:text-blue-600 transition" title="导入项目">
+             <button onClick={() => jsonInputRef.current?.click()} className="p-1.5 rounded-lg text-slate-600 hover:bg-white/40 hover:text-blue-600 transition" title="导入项目 (JSON)">
               <Upload size={14} />
             </button>
-            <input type="file" ref={jsonInputRef} onChange={handleJsonUpload} className="hidden" accept=".json" />
+            <input type="file" ref={jsonInputRef} onChange={handleJsonUpload} className="hidden" accept=".json,.itp" />
           </div>
         </div>
         
@@ -167,13 +168,20 @@ const ProjectList: React.FC<ProjectListProps> = ({
           <button onClick={onAddProject} className="liquid-button flex items-center justify-center gap-2 bg-slate-900 text-white p-2.5 rounded-xl text-[10px] font-black hover:bg-slate-800 transition shadow-lg uppercase tracking-wider">
             <Plus size={14} /> 新建项目
           </button>
-           <button onClick={() => setShowPasteModal(true)} className="liquid-button flex items-center justify-center gap-2 bg-indigo-600 text-white p-2.5 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition shadow-lg uppercase tracking-wider">
-            <Clipboard size={14} /> 粘贴导入
+          <button onClick={onExportProject} className="liquid-button flex items-center justify-center gap-2 bg-indigo-600 text-white p-2.5 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition shadow-lg uppercase tracking-wider">
+            <Download size={14} /> 导出项目
           </button>
         </div>
-        <button onClick={() => fileInputRef.current?.click()} className="liquid-button w-full flex items-center justify-center gap-2 bg-white/40 border border-white/60 text-slate-900 p-2 rounded-xl text-[10px] hover:bg-white/60 transition shadow-sm font-black uppercase tracking-wider">
-            <FileSpreadsheet size={14} /> Excel 智能审计导入
-        </button>
+        
+        <div className="grid grid-cols-2 gap-3">
+           <button onClick={() => setShowPasteModal(true)} className="liquid-button flex items-center justify-center gap-2 bg-white/40 border border-white/60 text-slate-900 p-2 rounded-xl text-[10px] hover:bg-white/60 transition shadow-sm font-black uppercase tracking-wider">
+            <Clipboard size={14} /> 粘贴导入
+          </button>
+          <button onClick={() => fileInputRef.current?.click()} className="liquid-button flex items-center justify-center gap-2 bg-white/40 border border-white/60 text-slate-900 p-2 rounded-xl text-[10px] hover:bg-white/60 transition shadow-sm font-black uppercase tracking-wider">
+            <FileSpreadsheet size={14} /> Excel 导入
+          </button>
+        </div>
+        
         <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".xlsx,.xls,.csv,.txt" />
       </div>
 
@@ -217,7 +225,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </span>
                     <button 
                         onClick={(e) => toggleVisibility(e, project)}
-                        // Fix: Moved the tooltip title to the button element as Lucide icon components do not support a 'title' prop in LucideProps.
                         title={project.visibility === 'private' ? '仅自己可见' : project.visibility === 'public-read' ? '全员只读' : '全员可编辑'}
                         className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-white/40 transition-all ${canManage ? 'hover:bg-blue-500 hover:text-white' : ''}`}
                     >
