@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { Task, LinkType } from '../types';
-import { Plus, Trash, AlertCircle, Link as LinkIcon, X, CheckSquare, Square, Folder, CornerDownRight, FileSpreadsheet, Download, Upload, ChevronRight, ChevronDown, CalendarDays, Lock } from 'lucide-react';
+import { Plus, Trash, AlertCircle, Link as LinkIcon, X, CheckSquare, Square, Folder, CornerDownRight, FileSpreadsheet, Download, Upload, ChevronRight, ChevronDown, CalendarDays, Lock, Percent } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ScheduleTableProps {
@@ -148,6 +148,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
       "代号": t.id, 
       "工作名称": t.name, 
       "工期": t.duration, 
+      "完成率": t.completion || 0,
       "区域": t.zone || "", 
       "类型": t.type, 
       "紧前工作": t.predecessors ? t.predecessors.join(',') : "", 
@@ -171,6 +172,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
         id: String(row["代号"] || Math.random().toString(36).substr(2, 5)),
         name: String(row["工作名称"] || "未命名"),
         duration: parseInt(row["工期"]) || 0,
+        completion: parseInt(row["完成率"]) || 0,
         type: (row["类型"] as LinkType) || LinkType.Real,
         zone: String(row["区域"] || ""),
         predecessors: String(row["紧前工作"] || "").split(/[,，\s]+/).filter(s => s !== "")
@@ -202,7 +204,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
                 <Lock size={12} /> <span>只读权限：您不拥有此项目且所有者未开放协作权限，更改将不会被保存。</span>
             </div>
         )}
-        <table className="w-full text-xs text-left border-collapse min-w-[850px] border border-slate-200 table-fixed">
+        <table className="w-full text-xs text-left border-collapse min-w-[950px] border border-slate-200 table-fixed">
           <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm text-slate-700 font-bold uppercase tracking-tight">
             <tr>
               <th className="p-1 border border-slate-300 w-12 text-center bg-slate-100">代号</th>
@@ -211,6 +213,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
               <th className="p-1 border border-slate-300 w-36 bg-slate-100 text-blue-600">开始时间</th>
               <th className="p-1 border border-slate-300 w-36 bg-slate-100 text-emerald-600">结束时间</th>
               <th className="p-1 border border-slate-300 w-14 text-center bg-slate-100">工期</th>
+              <th className="p-1 border border-slate-300 w-20 bg-slate-100 text-center">完成率</th>
               <th className="p-1 border border-slate-300 w-16 bg-slate-100">类型</th>
               <th className="p-1 border border-slate-300 w-24 bg-slate-100">紧前</th>
               <th className="p-1 border border-slate-300 w-10 text-center bg-slate-100">操作</th>
@@ -288,6 +291,22 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
                   </td>
                   <td className="p-0 border border-slate-300 h-8 text-center font-bold text-slate-600 bg-slate-50">
                     {task.duration}
+                  </td>
+                  <td className="p-0 border border-slate-300 h-8">
+                    {!isSummaryTask && (
+                      <div className="flex items-center gap-1 px-1 h-full">
+                        <input 
+                          type="number" 
+                          min="0" 
+                          max="100" 
+                          value={task.completion || 0} 
+                          disabled={isReadOnly}
+                          onChange={(e) => onUpdateTask({ ...task, completion: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
+                          className="w-10 h-full bg-transparent text-center outline-none focus:ring-1 focus:ring-blue-400 disabled:cursor-not-allowed font-bold"
+                        />
+                        <span className="text-[10px] text-slate-400">%</span>
+                      </div>
+                    )}
                   </td>
                   <td className="p-0 border border-slate-300 h-8">
                     <div className="w-full h-full flex items-center px-1 text-slate-500">

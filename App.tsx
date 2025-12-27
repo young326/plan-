@@ -1,9 +1,10 @@
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Project, Task, LinkType, Annotation, User, SyncMessage, ProjectVisibility } from './types';
 import ProjectList from './components/ProjectList';
 import ScheduleTable from './components/ScheduleTable';
-import NetworkDiagram from './components/NetworkDiagram';
+// Fix: Use named import for NetworkDiagram as it is not exported as default
+import { NetworkDiagram } from './components/NetworkDiagram';
 import AIAssistant from './components/AIAssistant';
 import Auth from './components/Auth';
 import VersionModal from './components/VersionModal';
@@ -15,21 +16,16 @@ const CURRENT_VERSION = 'v2.6.0';
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2小时毫秒数
 
 const App: React.FC = () => {
+  // 临时逻辑：默认直接登录管理员账号
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('intelliplan_user');
-    const lastLoginTime = localStorage.getItem('intelliplan_last_login_time');
-    
-    if (saved && lastLoginTime) {
-      const now = Date.now();
-      if (now - parseInt(lastLoginTime) < SESSION_TIMEOUT) {
-        return JSON.parse(saved);
-      } else {
-        // 会话过期，清除状态
-        localStorage.removeItem('intelliplan_user');
-        return null;
-      }
-    }
-    return null;
+    return {
+      id: '18663187732',
+      username: '系统管理员 (调试模式)',
+      phone: '18663187732',
+      role: 'admin',
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=admin`,
+      createdAt: Date.now()
+    };
   });
 
   const initialProject: Project = { 
@@ -43,14 +39,14 @@ const App: React.FC = () => {
     ownerName: '系统管理员',
     visibility: 'public-edit',
     tasks: [
-      { id: '10', name: '施工准备', duration: 20, predecessors: [], type: LinkType.Real, zone: '区域一' },
-      { id: '20', name: '测量放线', duration: 92, predecessors: ['10'], type: LinkType.Real, zone: '区域一' },
-      { id: '30', name: '切槽配管1', duration: 30, predecessors: ['20'], type: LinkType.Real, zone: '区域一' },
-      { id: '40', name: '灯箱安装1', duration: 90, predecessors: ['30'], type: LinkType.Real, zone: '区域一' },
-      { id: '50', name: '电缆敷设及接头制作', duration: 100, predecessors: ['40'], type: LinkType.Real, zone: '区域一' },
-      { id: '60', name: '弱电系统受压', duration: 30, predecessors: ['50'], type: LinkType.Real, zone: '区域一' },
-      { id: '70', name: '灯具安装', duration: 30, predecessors: ['60'], type: LinkType.Real, zone: '区域一' },
-      { id: '240', name: '竣工验收', duration: 0, predecessors: ['70'], type: LinkType.Wavy, zone: '区域四' },
+      { id: '10', name: '施工准备', duration: 20, completion: 100, predecessors: [], type: LinkType.Real, zone: '区域一' },
+      { id: '20', name: '测量放线', duration: 92, completion: 85, predecessors: ['10'], type: LinkType.Real, zone: '区域一' },
+      { id: '30', name: '切槽配管1', duration: 30, completion: 30, predecessors: ['20'], type: LinkType.Real, zone: '区域一' },
+      { id: '40', name: '灯箱安装1', duration: 90, completion: 0, predecessors: ['30'], type: LinkType.Real, zone: '区域一' },
+      { id: '50', name: '电缆敷设及接头制作', duration: 100, completion: 0, predecessors: ['40'], type: LinkType.Real, zone: '区域一' },
+      { id: '60', name: '弱电系统受压', duration: 30, completion: 0, predecessors: ['50'], type: LinkType.Real, zone: '区域一' },
+      { id: '70', name: '灯具安装', duration: 30, completion: 0, predecessors: ['60'], type: LinkType.Real, zone: '区域一' },
+      { id: '240', name: '竣工验收', duration: 0, completion: 0, predecessors: ['70'], type: LinkType.Wavy, zone: '区域四' },
     ] 
   };
 
@@ -82,33 +78,63 @@ const App: React.FC = () => {
 
   const [activeProjectId, setActiveProjectId] = useState<string>(visibleProjects[0]?.id || '1');
 
-  const broadcastChannel = useMemo(() => new BroadcastChannel(SYNC_CHANNEL), []);
+  // Stable BroadcastChannel
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
+    if (!broadcastChannelRef.current) {
+      broadcastChannelRef.current = new BroadcastChannel(SYNC_CHANNEL);
+    }
+    const bc = broadcastChannelRef.current;
+
     const handleSync = (event: MessageEvent<SyncMessage>) => {
       if (event.data.senderId === user?.id) return;
       if (event.data.type === 'UPDATE_PROJECT') {
         const updatedProjects = event.data.payload as Project[];
         setHistory(prev => {
-            const next = [...prev];
+          const next = [...prev];
+          if (historyIndex >= 0 && historyIndex < next.length) {
             next[historyIndex] = updatedProjects;
-            return next;
+          }
+          return next;
         });
       }
     };
-    broadcastChannel.onmessage = handleSync;
-    return () => broadcastChannel.close();
-  }, [broadcastChannel, user?.id, historyIndex]);
 
-  const pushUpdate = (newProjects: Project[]) => {
-    if (!user) return;
-    broadcastChannel.postMessage({
-      type: 'UPDATE_PROJECT',
-      projectId: activeProjectId,
-      payload: newProjects,
-      senderId: user.id
-    });
-  };
+    bc.addEventListener('message', handleSync);
+    return () => {
+      bc.removeEventListener('message', handleSync);
+    };
+  }, [user?.id, historyIndex]);
+
+  useEffect(() => {
+    return () => {
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.close();
+        broadcastChannelRef.current = null;
+      }
+    };
+  }, []);
+
+  const pushUpdate = useCallback((newProjects: Project[]) => {
+    if (!user || !broadcastChannelRef.current) return;
+    try {
+      broadcastChannelRef.current.postMessage({
+        type: 'UPDATE_PROJECT',
+        projectId: activeProjectId,
+        payload: newProjects,
+        senderId: user.id
+      });
+    } catch (err) {
+      broadcastChannelRef.current = new BroadcastChannel(SYNC_CHANNEL);
+      broadcastChannelRef.current.postMessage({
+        type: 'UPDATE_PROJECT',
+        projectId: activeProjectId,
+        payload: newProjects,
+        senderId: user.id
+      });
+    }
+  }, [user, activeProjectId]);
 
   const [leftWidth, setLeftWidth] = useState(260);
   const [middleWidth, setMiddleWidth] = useState(420);
@@ -191,6 +217,12 @@ const App: React.FC = () => {
     updateProjectsWithHistory(updatedProjects);
   };
 
+  const handleUpdateZoneOrder = (newOrder: string[]) => {
+    if (!canEditActiveProject) return;
+    const updatedProjects = projects.map(p => p.id === activeProjectId ? { ...p, zoneOrder: newOrder, lastModified: Date.now() } : p);
+    updateProjectsWithHistory(updatedProjects);
+  };
+
   const handleUpdateVisibility = (projectId: string, visibility: ProjectVisibility) => {
     const updatedProjects = projects.map(p => p.id === projectId ? { ...p, visibility, lastModified: Date.now() } : p);
     updateProjectsWithHistory(updatedProjects);
@@ -211,8 +243,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('intelliplan_user');
-    localStorage.removeItem('intelliplan_last_login_time');
+    // 直接设为 null 即可返回 Auth 界面（如果需要）
     setUser(null);
   };
 
@@ -220,7 +251,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden p-3 sm:p-5 gap-3 sm:gap-5">
-      {/* Liquid Header */}
       <header className="h-16 glass-panel rounded-[1.25rem] px-8 flex items-center justify-between shrink-0 shadow-2xl z-[100] border-white/50">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
@@ -234,9 +264,7 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
-          
           <div className="h-8 w-px bg-slate-400/20"></div>
-
           <div className="flex items-center gap-4 bg-white/20 backdrop-blur-2xl px-4 py-2 rounded-full border border-white/40">
             <div className="flex -space-x-2.5">
               <img src={user.avatar} className="w-7 h-7 rounded-full border-2 border-white shadow-md" title={`你 (${user.username})`} />
@@ -296,9 +324,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content Area - Floating Liquid Panes */}
       <main className="flex flex-1 gap-4 sm:gap-6 overflow-hidden">
-        {/* Left Side: Projects List */}
         <div 
           style={{ width: isLeftCollapsed ? 80 : leftWidth }} 
           className="flex-shrink-0 glass-panel rounded-[1.25rem] overflow-hidden flex flex-col shadow-2xl border-white/40"
@@ -357,7 +383,6 @@ const App: React.FC = () => {
           />
         </div>
 
-        {/* Middle: Schedule Table */}
         <div 
           style={{ width: isMiddleCollapsed ? 80 : middleWidth }} 
           className="flex-shrink-0 glass-panel rounded-[1.25rem] overflow-hidden flex flex-col shadow-2xl border-white/40"
@@ -366,14 +391,13 @@ const App: React.FC = () => {
             tasks={calculatedTasks} 
             isReadOnly={!canEditActiveProject}
             onUpdateTask={(t) => handleUpdateTasks(activeProject.tasks.map(orig => orig.id === t.id ? t : orig))} 
-            onAddTask={() => handleUpdateTasks([...activeProject.tasks, { id: Date.now().toString(), name: '新任务', duration: 1, predecessors: [], type: LinkType.Real }])} 
+            onAddTask={() => handleUpdateTasks([...activeProject.tasks, { id: Date.now().toString(), name: '新任务', duration: 1, completion: 0, predecessors: [], type: LinkType.Real }])} 
             onDeleteTask={(id) => handleUpdateTasks(activeProject.tasks.filter(t => t.id !== id))} 
             onReplaceTasks={handleUpdateTasks} 
             projectStartDate={new Date(activeProject.startDate || Date.now())} 
           />
         </div>
 
-        {/* Right: Network Diagram */}
         <div className="flex-1 glass-panel rounded-[1.5rem] overflow-hidden flex flex-col shadow-2xl border-white/50 bg-white/20">
           <NetworkDiagram 
             tasks={calculatedTasks.filter(t => !t.isSummary)} 
@@ -381,13 +405,15 @@ const App: React.FC = () => {
             onUpdateAnalysis={() => {}} 
             onUpdateTasks={handleUpdateTasks} 
             projectName={activeProject.name} 
+            zoneOrder={activeProject.zoneOrder}
+            onZoneOrderChange={handleUpdateZoneOrder}
             isFocusMode={isLeftCollapsed && isMiddleCollapsed} 
             onToggleFocusMode={() => { setIsLeftCollapsed(!isLeftCollapsed); setIsMiddleCollapsed(!isMiddleCollapsed); }} 
+            onExportJson={handleExportFullProject}
           />
         </div>
       </main>
 
-      {/* Modals & AI */}
       <VersionModal isOpen={isVersionModalOpen} onClose={() => setIsVersionModalOpen(false)} />
       <ManagementConsole 
         isOpen={isMgmtConsoleOpen} 

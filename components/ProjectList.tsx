@@ -122,9 +122,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
   const getVisibilityIcon = (v: ProjectVisibility) => {
     switch(v) {
-      case 'private': return <Lock size={10} title="仅自己可见" />;
-      case 'public-read': return <Eye size={10} title="全员只读" />;
-      case 'public-edit': return <Users size={10} title="全员可编辑" />;
+      // Fix: Removed 'title' prop from Lucide components as it is not part of LucideProps. Tooltips are handled by the parent button's title.
+      case 'private': return <Lock size={10} />;
+      case 'public-read': return <Eye size={10} />;
+      case 'public-edit': return <Users size={10} />;
     }
   };
 
@@ -216,6 +217,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </span>
                     <button 
                         onClick={(e) => toggleVisibility(e, project)}
+                        // Fix: Moved the tooltip title to the button element as Lucide icon components do not support a 'title' prop in LucideProps.
+                        title={project.visibility === 'private' ? '仅自己可见' : project.visibility === 'public-read' ? '全员只读' : '全员可编辑'}
                         className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-white/40 transition-all ${canManage ? 'hover:bg-blue-500 hover:text-white' : ''}`}
                     >
                         {getVisibilityIcon(project.visibility)}

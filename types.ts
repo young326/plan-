@@ -44,6 +44,7 @@ export interface Task {
   constraintDate?: number;
   labelOffsetX?: number;
   manualLane?: number;
+  completion?: number; // 完成百分比 (0-100)
   
   // Calculated fields
   earlyStart?: number;
