@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Task, LinkType, Annotation } from '../types';
@@ -10,7 +9,7 @@ interface NetworkDiagramProps {
   tasks: Task[];
   annotations?: Annotation[]; 
   onUpdateTasks?: (tasks: Task[]) => void;
-  onUpdateAnnotations?: (annotations: Annotation[]) => void;
+  onUpdateAnnotations?: (annotations: UpdateAnnotations) => void;
   onUpdateAnalysis: (criticalPath: string[], duration: number) => void;
   projectStartDate: Date;
   onUndo?: () => void;
@@ -25,12 +24,14 @@ interface NetworkDiagramProps {
   onExportJson?: () => void; 
 }
 
+type UpdateAnnotations = (annotations: Annotation[]) => void;
+
 const STYLES = {
   gridColor: '#94a3b8', 
   gridOpacity: 0.2,
   zoneBg: '#f8fafc',
   zoneBorder: '#cbd5e1',
-  taskHeight: 110, 
+  taskHeight: 80, // 泳道高度从 100 减小到 80，使水平线间隔更加紧凑
   nodeRadius: 5, 
   criticalColor: '#ef4444', // 关键路径：红色
   normalColor: '#2563eb',   // 普通实工作：蓝色
@@ -41,7 +42,7 @@ const STYLES = {
   highlightColor: '#f59e0b',
   progressColor: '#10b981', // 已完成：绿色
   progressBg: '#e2e8f0',
-  fontFamily: '"Microsoft YaHei", sans-serif',
+  fontFamily: '"Microsoft YaHei", "PingFang SC", sans-serif',
 };
 
 const TITLE_HEIGHT = 80;
@@ -233,6 +234,11 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
       svg.selectAll("*").remove();
       const currentMode = overrideMode || timeScaleMode;
       const contentHeight = Math.max(height, processedData.totalRows * STYLES.taskHeight + TITLE_HEIGHT + HEADER_HEIGHT + 100);
+      
+      // 为 SVG 添加全局字体渲染优化属性
+      svg.attr("text-rendering", "geometricPrecision")
+         .attr("shape-rendering", "geometricPrecision");
+
       const defs = svg.append("defs");
       
       const addMarker = (id: string, color: string, w=10, h=5) => {
@@ -405,7 +411,7 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
 
         if (isMilestone) {
           const diamondGroup = milestoneNodeGroup.append("g").attr("transform", `translate(${endX}, ${y})`).attr("cursor", "pointer").on("click", (e) => { e.stopPropagation(); handleOpenEdit(task); }).on("mouseenter", () => setHoveredTaskId(task.id)).on("mouseleave", () => setHoveredTaskId(null)).on("contextmenu", (e) => handleTaskContextMenu(e, task));
-          diamondGroup.append("path").attr("d", d3.symbol().type(d3.symbolDiamond).size(isSelected ? 200 : 100)()).attr("fill", isSelected ? STYLES.selectionColor : "#fff").attr("stroke", color).attr("stroke-width", isSelected ? 3 : 2).style("filter", isSelected ? "url(#selection-glow)" : "none");
+          diamondGroup.append("path").attr("transform", isSelected ? "scale(1.4)" : "scale(1)").attr("d", d3.symbol().type(d3.symbolDiamond).size(100)()).attr("fill", isSelected ? STYLES.selectionColor : "#fff").attr("stroke", color).attr("stroke-width", isSelected ? 3 : 2).style("filter", isSelected ? "url(#selection-glow)" : "none");
           
           if (task.completion && task.completion > 0 && !isVirtual) {
               drawProgressRing(diamondGroup, 0, 0, r + 4, task.completion);
@@ -611,11 +617,25 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           xml += `<mxCell id="${getNextId()}" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=${bgColor};strokeColor=#cbd5e1;opacity=50;" vertex="1" parent="1"><mxGeometry x="0" y="${y}" width="${width}" height="${h}" as="geometry" /></mxCell>`;
           xml += `<mxCell id="${getNextId()}" value="${zone.name}" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=#cbd5e1;fillColor=${bgColor};fontStyle=1;fontColor=${zone.color};" vertex="1" parent="1"><mxGeometry x="0" y="${y}" width="120" height="${h}" as="geometry" /></mxCell>`;
       });
+
       const nodeCoordSet = new Map<string, { x: number, y: number, isMilestone: boolean }>();
+      const realTaskEndPoints = new Set<string>(); // 记录实箭线结束位置，用于冗余日期过滤
+
+      // 第一阶段：收集节点坐标和实箭线端点信息
       processedData.tasks.forEach(item => {
-          const task = item.task; const startX = xScale(addDays(projectStartDate, task.earlyStart || 0)); const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0)); const y = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.55);
-          const startKey = `${Math.round(startX)},${Math.round(y)}`; const endKey = `${Math.round(endX)},${Math.round(y)}`;
+          const task = item.task; 
+          const startX = xScale(addDays(projectStartDate, task.earlyStart || 0)); 
+          const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0)); 
+          const y = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.55);
+          const startKey = `${Math.round(startX)},${Math.round(y)}`; 
+          const endKey = `${Math.round(endX)},${Math.round(y)}`;
           const isVirtual = task.type === LinkType.Virtual;
+          const isReal = task.type === LinkType.Real;
+          
+          if (isReal) {
+              realTaskEndPoints.add(endKey);
+          }
+
           if (!nodeCoordSet.has(startKey) && !isVirtual) nodeCoordSet.set(startKey, { x: startX, y, isMilestone: false });
           if (!nodeCoordSet.has(endKey) && !isVirtual) nodeCoordSet.set(endKey, { x: endX, y, isMilestone: task.type === LinkType.Wavy });
           else if (task.type === LinkType.Wavy) nodeCoordSet.get(endKey)!.isMilestone = true;
@@ -624,32 +644,59 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           const color = isCompleted ? STYLES.progressColor : (task.isCritical || task.type === LinkType.Wavy ? STYLES.criticalColor : STYLES.normalColor);
           const nodeRad = STYLES.nodeRadius; 
           
-          xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;endFill=1;html=1;strokeColor=${color};strokeWidth=1.2;verticalAlign=bottom;curved=0;endSize=7.0;dashed=${isVirtual ? 1 : 0};" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${startX + nodeRad}" y="${y}" as="sourcePoint" /><mxPoint x="${endX - nodeRad}" y="${y}" as="targetPoint" /></mxGeometry></mxCell>`;
+          xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;endFill=1;html=1;strokeColor=${color};strokeWidth=1.1;verticalAlign=bottom;curved=0;endSize=3.0;dashed=${isVirtual ? 1 : 0};" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${startX + nodeRad}" y="${y}" as="sourcePoint" /><mxPoint x="${endX - nodeRad}" y="${y}" as="targetPoint" /></mxGeometry></mxCell>`;
           task.predecessors.forEach(predId => {
               const predT = processedData.rawTasks.get(predId); const predGlobal = processedData.tasks.find(t => t.task.id === predId);
               if (!predT || !predGlobal) return;
               const endXPred = xScale(addDays(projectStartDate, predT.earlyFinish || 0)); const yPred = (predGlobal.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.55);
               if (startX > endXPred + 2) {
-                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1.0;curved=0;dashed=0;" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${endXPred + nodeRad}" y="${yPred}" as="sourcePoint" /><mxPoint x="${startX}" y="${yPred}" as="targetPoint" /></mxGeometry></mxCell>`;
+                  const x1 = endXPred + nodeRad;
+                  const x2 = startX;
+                  const amp = 3.2;  
+                  const freqStep = 2.5; 
+                  
+                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1.1;curved=1;dashed=0;" edge="1" parent="1">`;
+                  xml += `<mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${x1}" y="${yPred}" as="sourcePoint" /><mxPoint x="${x2}" y="${yPred}" as="targetPoint" />`;
+                  
+                  let pointsXml = '<Array as="points">';
+                  let curX = x1 + freqStep;
+                  let phase = 1; 
+                  while (curX < x2 - 1.5) {
+                      let curY = yPred;
+                      if (phase === 1) curY = yPred - amp;
+                      else if (phase === 3) curY = yPred + amp;
+                      
+                      pointsXml += `<mxPoint x="${curX}" y="${curY}" />`;
+                      curX += freqStep;
+                      phase = (phase % 4) + 1;
+                  }
+                  pointsXml += '</Array>';
+                  xml += `${pointsXml}</mxGeometry></mxCell>`;
               }
               if (Math.abs(yPred - y) > 5) {
                   const direction = (y > yPred) ? 1 : -1;
-                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;html=1;strokeColor=#000000;strokeWidth=1.0;dashed=1;endSize=7.0;" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${startX}" y="${yPred}" as="sourcePoint" /><mxPoint x="${startX}" y="${y - (direction * nodeRad)}" as="targetPoint" /></mxGeometry></mxCell>`;
+                  xml += `<mxCell id="${getNextId()}" value="" style="endArrow=block;html=1;strokeColor=#000000;strokeWidth=1.1;dashed=1;endSize=3.0;" edge="1" parent="1"><mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="${startX}" y="${yPred}" as="sourcePoint" /><mxPoint x="${startX}" y="${y - (direction * nodeRad)}" as="targetPoint" /></mxGeometry></mxCell>`;
               }
           });
       });
       nodeCoordSet.forEach((coord, key) => {
           const id = getNextId();
-          const nodeRad = STYLES.nodeRadius;
-          if (coord.isMilestone) { xml += `<mxCell id="${id}" value="" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef4444;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="${coord.x - nodeRad}" y="${coord.y - nodeRad}" width="${nodeRad * 2}" height="${nodeRad * 2}" as="geometry" /></mxCell>`; }
-          else { xml += `<mxCell id="${id}" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="${coord.x - nodeRad}" y="${coord.y - nodeRad}" width="${nodeRad * 2}" height="${nodeRad * 2}" as="geometry" /></mxCell>`; }
+          const color = coord.isMilestone ? STYLES.criticalColor : "#000000";
+          if (coord.isMilestone) { 
+              xml += `<mxCell id="${id}" value="" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=${color};strokeWidth=1.5;" vertex="1" parent="1"><mxGeometry x="${coord.x - 6}" y="${coord.y - 6}" width="12" height="12" as="geometry" /></mxCell>`; 
+          }
+          else { 
+              xml += `<mxCell id="${id}" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="${coord.x - 5}" y="${coord.y - 5}" width="10" height="10" as="geometry" /></mxCell>`; 
+          }
       });
       processedData.tasks.forEach(item => {
           const task = item.task; 
           const startX = xScale(addDays(projectStartDate, task.earlyStart || 0)); 
           const endX = xScale(addDays(projectStartDate, task.earlyFinish || 0)); 
           const y = (item.globalRowIndex * rowHeight) + HEADER_HEIGHT + TITLE_HEIGHT + (rowHeight * 0.55);
+          const startKey = `${Math.round(startX)},${Math.round(y)}`;
           const isVirtual = task.type === LinkType.Virtual;
+          const isReal = task.type === LinkType.Real;
           const isCompleted = task.completion === 100 && !isVirtual;
           const color = isCompleted ? STYLES.progressColor : (task.isCritical || task.type === LinkType.Wavy ? STYLES.criticalColor : STYLES.normalColor);
           const startDateStr = formatYYMMDD(addDays(projectStartDate, task.earlyStart || 0)); 
@@ -657,7 +704,10 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           
           const isShort = (endX - startX) < 45;
 
-          if (task.type !== LinkType.Wavy) { 
+          // 核心优化：如果节点前后均为实箭线，则隐藏开始日期
+          const hideStartDate = (isReal && realTaskEndPoints.has(startKey)) || isVirtual || task.type === LinkType.Wavy;
+
+          if (!hideStartDate) { 
               xml += `<mxCell id="${getNextId()}" value="${startDateStr}" style="text;html=1;align=${isShort ? 'right' : 'center'};verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;fontColor=#64748b;" vertex="1" parent="1"><mxGeometry x="${isShort ? startX - 46 : startX - 40}" y="${y + 11}" width="80" height="20" as="geometry" /></mxCell>`; 
           }
           xml += `<mxCell id="${getNextId()}" value="${endDateStr}" style="text;html=1;align=${isShort ? 'left' : 'center'};verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;fontColor=#64748b;" vertex="1" parent="1"><mxGeometry x="${isShort ? endX + 6 : endX - 40}" y="${y + 11}" width="80" height="20" as="geometry" /></mxCell>`;
@@ -668,7 +718,8 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           xml += `<mxCell id="${getNextId()}" value="${task.name}" style="text;html=1;align=center;verticalAlign=bottom;resizable=0;points=[];strokeColor=none;fillColor=none;fontSize=11;whiteSpace=wrap;overflow=hidden;fontColor=${color};fontStyle=0;" vertex="1" parent="1"><mxGeometry x="${taskX}" y="${y - 32}" width="${taskWidth}" height="30" as="geometry" /></mxCell>`;
           
           if (task.type === LinkType.Real && task.duration > 0) { 
-              xml += `<mxCell id="${getNextId()}" value="${task.duration}d" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];strokeColor=none;fillColor=none;fontSize=10;fontColor=${color};fontStyle=0;" vertex="1" parent="1"><mxGeometry x="${(startX + endX) / 2 - 20}" y="${y + 1}" width="40" height="14" as="geometry" /></mxCell>`; 
+              // 工期标注位置微调：从 y - 7 调整为 y - 6，向下移动 1px
+              xml += `<mxCell id="${getNextId()}" value="${task.duration}d" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];strokeColor=none;fillColor=none;fontSize=10;fontColor=${color};fontStyle=0;" vertex="1" parent="1"><mxGeometry x="${(startX + endX) / 2 - 20}" y="${y - 6}" width="40" height="14" as="geometry" /></mxCell>`; 
           }
       });
       xml += `\n      </root>\n    </mxGraphModel>\n  </diagram>\n</mxfile>`; return xml;
@@ -682,26 +733,58 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           return;
       }
 
-      const totalDays = processedData.projectDuration + 15; const totalMonths = totalDays / 30; const baseWidthPerMonth = 50; 
-      const fullWidth = Math.max(dimensions.width, 150 + totalMonths * baseWidthPerMonth);
+      const totalDays = processedData.projectDuration + 15; 
+      const totalMonths = totalDays / 30; 
+      
+      const baseWidthPerMonth = 120; 
+      const fullWidth = Math.max(dimensions.width * 1.5, 150 + totalMonths * baseWidthPerMonth);
       const fullHeight = Math.max(dimensions.height, TITLE_HEIGHT + HEADER_HEIGHT + processedData.totalRows * STYLES.taskHeight + 100);
       const exSc = d3.scaleTime().domain([projectStartDate, addDays(projectStartDate, totalDays)]).range([150, fullWidth - 50]);
       
       if (type === 'drawio') { const xmlContent = generateDrawioXml(exSc, fullWidth, fullHeight); const blob = new Blob([xmlContent], { type: "text/xml" }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${fileName}.drawio`; link.click(); return; }
+      
       try {
-        const hDiv = document.createElement('div'); hDiv.style.position = 'absolute'; hDiv.style.top = '-9999px'; hDiv.style.left = '-9999px'; hDiv.style.width = `${fullWidth}px`; hDiv.style.height = `${fullHeight}px`; document.body.appendChild(hDiv);
+        const hDiv = document.createElement('div'); 
+        hDiv.style.position = 'absolute'; hDiv.style.top = '-9999px'; hDiv.style.left = '-9999px'; 
+        hDiv.style.width = `${fullWidth}px`; hDiv.style.height = `${fullHeight}px`; 
+        hDiv.style.background = '#ffffff';
+        hDiv.style.setProperty('-webkit-font-smoothing', 'antialiased');
+        hDiv.style.setProperty('-moz-osx-font-smoothing', 'grayscale');
+        document.body.appendChild(hDiv);
+
         const tSvg = d3.select(hDiv).append("svg").attr("width", fullWidth).attr("height", fullHeight).attr("xmlns", "http://www.w3.org/2000/svg");
         drawIntoSelection(tSvg, exSc, fullWidth, fullHeight, 0, 'month');
+        
         if (type === 'png' || type === 'pdf' || type === 'print') {
-            const canvas = await html2canvas(hDiv, { scale: 2, backgroundColor: '#ffffff', useCORS: true }); const imgData = canvas.toDataURL('image/png');
-            if (type === 'png') { const link = document.createElement('a'); link.download = `${fileName}.png`; link.href = imgData; link.click(); }
-            else if (type === 'pdf') { const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [canvas.width, canvas.height] }); pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height); pdf.save(`${fileName}.pdf`); }
+            const canvas = await html2canvas(hDiv, { 
+                scale: 4, 
+                backgroundColor: '#ffffff', 
+                useCORS: true,
+                logging: false,
+                imageTimeout: 0,
+            }); 
+            
+            const imgData = canvas.toDataURL('image/png', 1.0);
+            
+            if (type === 'png') { 
+                const link = document.createElement('a'); link.download = `${fileName}.png`; link.href = imgData; link.click(); 
+            }
+            else if (type === 'pdf') { 
+                const pdf = new jsPDF({ 
+                    orientation: 'landscape', 
+                    unit: 'px', 
+                    format: [canvas.width, canvas.height],
+                    compress: true
+                }); 
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height, undefined, 'FAST'); 
+                pdf.save(`${fileName}.pdf`); 
+            }
             else if (type === 'print') {
                 const printWindow = window.open('', '_blank');
                 if (printWindow) {
-                    printWindow.document.write(`<html><head><title>${projectName || 'IntelliPlan'}</title></head><body style="margin:0;padding:0;display:flex;justify-content:center;background:#fff;"><img src="${imgData}" style="max-width:100%; height:auto;" /></body></html>`);
+                    printWindow.document.write(`<html><head><title>${projectName || 'IntelliPlan'}</title></head><body style="margin:0;padding:0;display:flex;justify-content:center;background:#fff;"><img src="${imgData}" style="width:100%; height:auto;" /></body></html>`);
                     printWindow.document.close(); printWindow.focus();
-                    setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+                    setTimeout(() => { printWindow.print(); printWindow.close(); }, 800);
                 }
             }
         } else if (type === 'svg') {
@@ -710,7 +793,7 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
              const link = document.createElement('a'); link.href = url; link.download = `${fileName}.svg`; link.click();
         }
         document.body.removeChild(hDiv);
-      } catch (e) { console.error(e); alert("导出/打印失败"); }
+      } catch (e) { console.error(e); alert("导出/打印失败，请检查网络或浏览器配置"); }
   };
 
   useEffect(() => {
@@ -778,8 +861,8 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
                 <button onClick={() => setShowExportMenu(!showExportMenu)} className="p-1 flex items-center gap-1.5 text-xs bg-cyan-600 text-white px-3 py-1.5 rounded hover:bg-cyan-700 shadow-sm transition font-bold"><Share2 size={14} /> 导出/打印</button>
                 {showExportMenu && (
                     <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 shadow-2xl rounded-lg overflow-hidden z-[50] w-52 flex flex-col">
-                        <button onClick={() => handleExport('png')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full"><ImageIcon size={14} /> 图片 (PNG)</button>
-                        <button onClick={() => handleExport('pdf')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full"><FileText size={14} /> 文档 (PDF)</button>
+                        <button onClick={() => handleExport('png')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full"><ImageIcon size={14} /> 图片 (PNG) - 高清</button>
+                        <button onClick={() => handleExport('pdf')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full"><FileText size={14} /> 文档 (PDF) - 高清</button>
                         <button onClick={() => handleExport('svg')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full"><Globe size={14} /> 矢量图 (SVG)</button>
                         <button onClick={() => handleExport('drawio')} className="px-4 py-3 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors text-left w-full"><FileJson size={14} /> draw.io (XML)</button>
                         <button onClick={() => handleExport('json')} className="px-4 py-3 text-xs text-blue-700 font-bold hover:bg-blue-50 flex items-center gap-3 transition-colors border-t border-slate-100 text-left w-full"><FileCode size={14} /> 项目数据 (JSON)</button>
@@ -789,10 +872,9 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
             </div>
         </div>
       </div>
-      <div ref={containerRef} className="flex-1 overflow-hidden relative bg-slate-50 cursor-grab active:cursor-grabbing" onClick={() => { setEditingTask(null); setContextMenu(null); }}>
+      <div ref={containerRef} className="flex-1 overflow-hidden relative bg-slate-50 cursor-grab architecture:cursor-grabbing" onClick={() => { setEditingTask(null); setContextMenu(null); }}>
         <svg ref={svgRef} className="w-full h-full block" onClick={(e) => e.stopPropagation()}></svg>
         
-        {/* Floating dragging tooltip */}
         {draggingInfo && (
            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[150%] bg-blue-600 text-white px-4 py-2 rounded-xl shadow-2xl font-black text-xs animate-in fade-in zoom-in pointer-events-none flex items-center gap-2 border border-blue-400">
               <Calendar size={14} />
