@@ -923,41 +923,59 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-900 relative border-l border-slate-200 dark:border-slate-800 transition-colors duration-300">
-      <div className="h-10 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center px-4 gap-3 shadow-sm z-[20] shrink-0 transition-colors duration-300">
-        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200"><Layers size={16} className="text-cyan-600 dark:text-cyan-400"/><span className="font-bold text-sm">时标网络计划</span></div>
-        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-        <div className="flex bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-          {(['day', 'month', 'year'] as TimeScaleMode[]).map(mode => (
-            <button key={mode} onClick={() => setTimeScaleMode(mode)} className={`px-3 py-1 text-[10px] font-bold uppercase transition-all rounded-md ${timeScaleMode === mode ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}>{mode === 'day' ? '日' : mode === 'month' ? '月' : '年'}</button>
-          ))}
-        </div>
-        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-        
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-           <button onClick={() => handleManualZoom('in')} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded transition-all text-slate-600 dark:text-slate-400" title="放大"><ZoomIn size={14}/></button>
-           <button onClick={() => handleManualZoom('out')} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded transition-all text-slate-600 dark:text-slate-400" title="缩小"><ZoomOut size={14}/></button>
-           <button onClick={() => handleManualZoom('reset')} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded transition-all text-slate-600 dark:text-slate-400" title="重置视图"><Search size={14}/></button>
-        </div>
-        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-        
-        <button onClick={() => setShowZoneModal(true)} className="p-1 flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition font-bold" title="调整区域显示顺序"><ArrowDownUp size={14} /> 区域管理</button>
-        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-        <button 
-            onClick={() => setShowProgressRings(!showProgressRings)} 
-            className={`p-1 flex items-center gap-1.5 text-xs transition font-bold ${showProgressRings ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
-            title={showProgressRings ? "点击隐藏进度环" : "点击显示进度环"}
-        >
-            <Disc size={14} /> 进度环
-        </button>
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-[#fbfbfd] dark:bg-slate-900 flex items-center justify-between z-[20]">
+        <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+                <Layers size={18} className="text-slate-800 dark:text-slate-100" strokeWidth={2} />
+                <h3 className="text-sm font-bold text-slate-800 dark:text-white tracking-tight">网络计划</h3>
+            </div>
+            
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-700"></div>
+            
+            <div className="flex items-center gap-1">
+                 {/* Time Scale */}
+                 <div className="flex bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 mr-1">
+                    {(['day', 'month', 'year'] as TimeScaleMode[]).map(mode => (
+                        <button key={mode} onClick={() => setTimeScaleMode(mode)} className={`px-2.5 py-1 text-[10px] font-bold uppercase transition-all rounded-md ${timeScaleMode === mode ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}>{mode === 'day' ? '日' : mode === 'month' ? '月' : '年'}</button>
+                    ))}
+                 </div>
+                 
+                 {/* Zoom Controls */}
+                 <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 mr-1">
+                   <button onClick={() => handleManualZoom('in')} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded transition-all text-slate-600 dark:text-slate-400" title="放大"><ZoomIn size={14}/></button>
+                   <button onClick={() => handleManualZoom('out')} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded transition-all text-slate-600 dark:text-slate-400" title="缩小"><ZoomOut size={14}/></button>
+                   <button onClick={() => handleManualZoom('reset')} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded transition-all text-slate-600 dark:text-slate-400" title="重置视图"><Search size={14}/></button>
+                </div>
 
-        <div className="flex-1"></div>
+                {/* Zone Manager */}
+                <button onClick={() => setShowZoneModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all text-[12px] font-medium" title="调整区域显示顺序">
+                    <ArrowDownUp size={14} /> <span className="hidden sm:inline">区域</span>
+                </button>
+                
+                {/* Progress Rings */}
+                <button 
+                    onClick={() => setShowProgressRings(!showProgressRings)} 
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all text-[12px] font-medium ${showProgressRings ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                    title={showProgressRings ? "点击隐藏进度环" : "点击显示进度环"}
+                >
+                    <Disc size={14} /> <span className="hidden sm:inline">进度</span>
+                </button>
+            </div>
+        </div>
+        
         <div className="flex items-center gap-2">
-            <button onClick={onToggleFocusMode} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all border ${isFocusMode ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`} title={isFocusMode ? "还原面板布局" : "全屏专注模式"}>
-                {isFocusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{isFocusMode ? "还原布局" : "专注模式"}
+            <button onClick={onToggleFocusMode} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all text-[12px] font-medium border ${isFocusMode ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400' : 'bg-transparent border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`} title={isFocusMode ? "还原面板布局" : "全屏专注模式"}>
+                {isFocusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                <span className="hidden sm:inline">{isFocusMode ? "还原" : "专注"}</span>
             </button>
-            <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1.5"></div>
+            
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-700"></div>
+
             <div className="relative">
-                <button onClick={() => setShowExportMenu(!showExportMenu)} className="p-1 flex items-center gap-1.5 text-xs bg-cyan-600 text-white px-3 py-1.5 rounded hover:bg-cyan-700 shadow-sm transition font-bold"><Share2 size={14} /> 导出/打印</button>
+                <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-cyan-600 hover:bg-cyan-700 text-white shadow-sm transition-all text-[12px] font-medium">
+                    <Share2 size={14} /> 
+                    <span>导出</span>
+                </button>
                 {showExportMenu && (
                     <div className="absolute right-0 top-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl rounded-lg overflow-hidden z-[50] w-52 flex flex-col">
                         <button onClick={() => handleExport('png')} className="px-4 py-3 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-3 transition-colors text-left w-full"><ImageIcon size={14} /> 图片 (PNG) - 高清</button>
