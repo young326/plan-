@@ -206,15 +206,20 @@ const App: React.FC = () => {
       iterations++;
       _tasks.forEach(task => {
         if (task.isSummary) return;
-        let maxES = 0;
+        
+        // Critical Fix: Initialize maxES with constraintDate if it exists, otherwise 0.
+        // This allows tasks to be scheduled BEFORE project start date (negative offset) if explicitly constrained.
+        let maxES = task.constraintDate !== undefined ? task.constraintDate : 0;
+        
         task.predecessors.forEach(pid => {
           const p = taskMap.get(pid);
           if (p && p.earlyFinish !== undefined) maxES = Math.max(maxES, p.earlyFinish);
         });
-        if (task.constraintDate !== undefined) maxES = Math.max(maxES, task.constraintDate);
-        if (task.earlyStart !== maxES) { 
+        
+        const newEarlyFinish = maxES + task.duration;
+        if (task.earlyStart !== maxES || task.earlyFinish !== newEarlyFinish) { 
           task.earlyStart = maxES; 
-          task.earlyFinish = maxES + task.duration; 
+          task.earlyFinish = newEarlyFinish; 
           changed = true; 
         }
       });

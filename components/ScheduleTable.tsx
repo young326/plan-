@@ -137,23 +137,40 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
     return Math.round((target.getTime() - start.getTime()) / (1000 * 3600 * 24));
   };
 
+  // Updated Logic: Changing start date updates the constraint AND calculates new duration
+  // based on the EXISTING end date. (Anchors End Date)
   const handleStartChange = (task: Task, dateStr: string) => {
     if (!dateStr || isReadOnly) return;
     const newStartOffset = getDaysFromDateStr(dateStr);
+    
+    // Calculate current finish offset
     const currentFinishOffset = (task.earlyFinish || 1) - 1;
-    const newDuration = Math.max(0, currentFinishOffset - newStartOffset + 1);
+    
+    // New Duration = Fixed End - New Start + 1
+    let newDuration = currentFinishOffset - newStartOffset + 1;
+    
+    // Prevent invalid duration (start after end). Min duration is 1.
+    if (newDuration < 1) newDuration = 1;
+
     onUpdateTask({ 
       ...task, 
       constraintDate: newStartOffset,
-      duration: newDuration 
+      duration: newDuration
     });
   };
 
+  // Updated Logic: Changing end date anchors Start Date and calculates new duration.
   const handleEndChange = (task: Task, dateStr: string) => {
     if (!dateStr || isReadOnly) return;
     const selectedFinishOffset = getDaysFromDateStr(dateStr);
     const currentStartOffset = task.earlyStart || 0;
-    const newDuration = Math.max(0, selectedFinishOffset - currentStartOffset + 1);
+    
+    // New Duration = New End - Fixed Start + 1
+    let newDuration = selectedFinishOffset - currentStartOffset + 1;
+    
+    // Prevent invalid duration
+    if (newDuration < 1) newDuration = 1;
+
     onUpdateTask({ ...task, duration: newDuration });
   };
 
