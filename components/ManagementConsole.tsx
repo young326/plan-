@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Project, ProjectVisibility } from '../types';
 import { X, Users, FolderKanban, ShieldCheck, Trash2, Search, Filter, Database, ArrowUpDown, Clock, Plus, UserPlus, Lock, Smartphone, UserCircle } from 'lucide-react';
@@ -87,9 +86,9 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
 
   return (
     <div className="fixed inset-0 z-[4000] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-500 relative">
+      <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-500 relative border border-white/20 dark:border-slate-800">
         {/* Header */}
-        <div className="p-6 bg-slate-900 text-white shrink-0 flex justify-between items-center">
+        <div className="p-6 bg-slate-900 dark:bg-slate-950 text-white shrink-0 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-indigo-500 rounded-2xl shadow-xl shadow-indigo-500/20">
               <ShieldCheck size={24} />
@@ -105,17 +104,17 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
         </div>
 
         {/* Toolbar */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-          <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+          <div className="flex bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
             <button 
               onClick={() => setActiveTab('users')}
-              className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'users' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'users' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
             >
               <Users size={16} /> 用户管理 ({users.length})
             </button>
             <button 
               onClick={() => setActiveTab('projects')}
-              className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'projects' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'projects' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
             >
               <FolderKanban size={16} /> 全部项目 ({allProjects.length})
             </button>
@@ -135,7 +134,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
               <input 
                 type="text" 
                 placeholder="搜索名称、手机号..." 
-                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-slate-200"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
@@ -144,7 +143,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white dark:bg-slate-900">
           {activeTab === 'users' ? (
             <table className="w-full text-left border-separate border-spacing-y-2">
               <thead>
@@ -157,23 +156,23 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
               </thead>
               <tbody>
                 {filteredUsers.map(user => (
-                  <tr key={user.phone} className="group bg-slate-50/50 hover:bg-indigo-50/50 transition-colors rounded-2xl overflow-hidden">
+                  <tr key={user.phone} className="group bg-slate-50/50 dark:bg-slate-800/50 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors rounded-2xl overflow-hidden">
                     <td className="px-4 py-4 rounded-l-2xl">
                       <div className="flex items-center gap-3">
-                        <img src={user.avatar} className="w-10 h-10 rounded-full border border-white shadow-sm" />
+                        <img src={user.avatar} className="w-10 h-10 rounded-full border border-white dark:border-slate-700 shadow-sm" />
                         <div>
-                          <p className="text-sm font-bold text-slate-800">{user.username}</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{user.username}</p>
                           <p className="text-[10px] text-slate-400 font-mono">{user.phone}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight ${user.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                      <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight ${user.role === 'admin' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}`}>
                         {user.role === 'admin' ? '管理员' : '普通用户'}
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2 text-slate-500 text-xs font-medium">
+                      <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-medium">
                         <Clock size={12} />
                         {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '早期用户'}
                       </div>
@@ -182,7 +181,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
                       {user.phone !== '18663187732' && (
                         <button 
                           onClick={() => handleDeleteUser(user.phone)}
-                          className="p-2 text-slate-300 hover:text-red-500 hover:bg-white rounded-xl transition-all"
+                          className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all"
                           title="注销账号"
                         >
                           <Trash2 size={16} />
@@ -206,23 +205,23 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
               </thead>
               <tbody>
                 {filteredProjects.map(project => (
-                  <tr key={project.id} className="group bg-slate-50/50 hover:bg-indigo-50/50 transition-colors rounded-2xl overflow-hidden">
+                  <tr key={project.id} className="group bg-slate-50/50 dark:bg-slate-800/50 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors rounded-2xl overflow-hidden">
                     <td className="px-4 py-4 rounded-l-2xl">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center border border-slate-100 text-indigo-500 shadow-sm">
+                        <div className="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center border border-slate-100 dark:border-slate-600 text-indigo-500 shadow-sm">
                           <Database size={20} />
                         </div>
-                        <p className="text-sm font-bold text-slate-800">{project.name}</p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{project.name}</p>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-xs text-slate-600 font-bold">
+                    <td className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 font-bold">
                       {project.ownerName}
                     </td>
                     <td className="px-4 py-4">
                       <select 
                         value={project.visibility}
                         onChange={(e) => onUpdateProjectVisibility(project.id, e.target.value as ProjectVisibility)}
-                        className="bg-white border border-slate-200 rounded-lg text-[10px] font-bold py-1.5 px-2 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                        className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-bold py-1.5 px-2 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer dark:text-slate-200"
                       >
                         <option value="private">私有 (Private)</option>
                         <option value="public-read">公开只读 (Public Read)</option>
@@ -235,7 +234,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
                     <td className="px-4 py-4 text-right rounded-r-2xl">
                       <button 
                         onClick={() => { if(confirm('确定强制删除该项目吗？此操作无法撤销。')) onDeleteProject(project.id); }}
-                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-white rounded-xl transition-all"
+                        className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -250,15 +249,15 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
         {/* Add User Modal */}
         {isAddingUser && (
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-md p-8 animate-in zoom-in fade-in duration-300 border border-slate-100">
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-2xl w-full max-w-md p-8 animate-in zoom-in fade-in duration-300 border border-slate-100 dark:border-slate-700">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-blue-100 rounded-xl text-blue-600">
+                  <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600 dark:text-blue-400">
                     <UserPlus size={20} />
                   </div>
-                  <h3 className="text-lg font-black text-slate-800">新增系统用户</h3>
+                  <h3 className="text-lg font-black text-slate-800 dark:text-white">新增系统用户</h3>
                 </div>
-                <button onClick={() => setIsAddingUser(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <button onClick={() => setIsAddingUser(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                   <X size={20} />
                 </button>
               </div>
@@ -270,7 +269,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
                     <Smartphone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
                       type="tel" 
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white"
                       placeholder="请输入11位手机号"
                       value={newUser.phone}
                       onChange={e => setNewUser({...newUser, phone: e.target.value})}
@@ -285,7 +284,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
                     <UserCircle size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
                       type="text" 
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white"
                       placeholder="设置显示名称"
                       value={newUser.username}
                       onChange={e => setNewUser({...newUser, username: e.target.value})}
@@ -300,7 +299,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
                     <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
                       type="password" 
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white"
                       placeholder="设置账号初始密码"
                       value={newUser.password}
                       onChange={e => setNewUser({...newUser, password: e.target.value})}
@@ -319,7 +318,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
                   <button 
                     type="button"
                     onClick={() => setIsAddingUser(false)}
-                    className="px-6 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all"
+                    className="px-6 py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
                   >
                     取消
                   </button>
@@ -330,7 +329,7 @@ const ManagementConsole: React.FC<ManagementConsoleProps> = ({ isOpen, onClose, 
         )}
 
         {/* Footer */}
-        <div className="p-6 bg-slate-50 border-t border-slate-100 shrink-0 text-center">
+        <div className="p-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0 text-center">
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">管理员安全管控界面 · 操作日志已记录</p>
         </div>
       </div>

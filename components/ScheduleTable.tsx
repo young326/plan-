@@ -1,7 +1,6 @@
-
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Task, LinkType } from '../types';
-import { Plus, Trash, AlertCircle, Link as LinkIcon, X, CheckSquare, Square, Folder, CornerDownRight, FileSpreadsheet, Download, Upload, ChevronRight, ChevronDown, CalendarDays, Lock, Percent } from 'lucide-react';
+import { Plus, Trash, Link as LinkIcon, X, CheckSquare, Square, Download, Upload, ChevronRight, ChevronDown, Table, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ScheduleTableProps {
@@ -14,10 +13,61 @@ interface ScheduleTableProps {
   projectStartDate: Date;
 }
 
+// Compact column widths for high-density display
+const DEFAULT_WIDTHS = {
+  id: 35,
+  zone: 50,
+  name: 180, 
+  start: 85,
+  end: 85,
+  duration: 45,
+  completion: 45,
+  type: 65,
+  predecessors: 80,
+  actions: 35
+};
+
 const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpdateTask, onAddTask, onDeleteTask, onReplaceTasks, projectStartDate }) => {
   const [linkModalTaskId, setLinkModalTaskId] = useState<string | null>(null);
-  const [isWpsModalOpen, setIsWpsModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Column resizing state
+  const [colWidths, setColWidths] = useState(DEFAULT_WIDTHS);
+  const resizingRef = useRef<{ key: keyof typeof DEFAULT_WIDTHS, startX: number, startWidth: number } | null>(null);
+
+  // Resize handlers
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const { key, startX, startWidth } = resizingRef.current;
+      const diff = e.clientX - startX;
+      setColWidths(prev => ({
+        ...prev,
+        [key]: Math.max(30, startWidth + diff)
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (resizingRef.current) {
+        resizingRef.current = null;
+        document.body.style.cursor = '';
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const startResize = (e: React.MouseEvent, key: keyof typeof DEFAULT_WIDTHS) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = { key, startX: e.clientX, startWidth: colWidths[key] };
+    document.body.style.cursor = 'col-resize';
+  };
 
   const flattenedTasks = useMemo(() => {
     const result: { task: Task; level: number }[] = [];
@@ -181,71 +231,235 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
     } catch (err) { alert("导入失败"); } finally { if (fileInputRef.current) fileInputRef.current.value = ""; }
   };
 
+  // Apple Numbers style header button
+  const headerBtnClass = "flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all text-[12px] font-medium";
+
   return (
-    <div className="h-full flex flex-col bg-white relative">
-      <div className="flex items-center justify-between p-2 bg-slate-100 border-b border-slate-200 shrink-0">
-        <div className="flex items-center gap-2">
-          <h3 className="font-bold text-slate-700 text-sm">工程进度计划表</h3>
-          <div className="h-4 w-px bg-slate-300 mx-1"></div>
-          <button onClick={() => setIsWpsModalOpen(true)} className="flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded hover:bg-emerald-100 transition-colors">
-            <FileSpreadsheet size={12} /> Excel 导入/导出
-          </button>
+    <div className="h-full flex flex-col bg-white dark:bg-slate-900 relative">
+      <style>{`
+        .custom-scrollbar-thick::-webkit-scrollbar {
+          width: 12px;
+          height: 12px;
+        }
+        .custom-scrollbar-thick::-webkit-scrollbar-thumb {
+          background: #d1d5db;
+          border-radius: 6px;
+          border: 3px solid transparent;
+          background-clip: content-box;
+        }
+        .custom-scrollbar-thick::-webkit-scrollbar-thumb:hover {
+          background: #9ca3af;
+        }
+        .dark .custom-scrollbar-thick::-webkit-scrollbar-thumb {
+          background: #475569;
+        }
+        .resizer {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            cursor: col-resize;
+            z-index: 10;
+        }
+        .resizer:hover, .resizing {
+            background: #3b82f6;
+            opacity: 0.5;
+        }
+        /* Clean Horizontal Lines Only Style */
+        .numbers-header th {
+            background-color: #f8fafc;
+            color: #64748b;
+            font-weight: 600;
+            text-align: left;
+            font-size: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0; /* Added Vertical Border */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 8px 4px; /* Reduced Header Padding */
+        }
+        .numbers-header th:last-child {
+            border-right: none;
+        }
+        .dark .numbers-header th {
+            background-color: #1e293b;
+            color: #94a3b8;
+            border-bottom: 1px solid #334155;
+            border-right: 1px solid #334155; /* Added Vertical Border Dark */
+        }
+        .dark .numbers-header th:last-child {
+            border-right: none;
+        }
+
+        .numbers-table td {
+            border-bottom: 1px solid #f1f5f9; /* Subtle horizontal line */
+            border-right: none; /* No vertical borders in body */
+            padding: 0;
+        }
+        .dark .numbers-table td {
+            border-bottom: 1px solid #334155;
+        }
+        
+        /* Override global form styles for table inputs to remove "box" look */
+        .numbers-table input, 
+        .numbers-table select {
+            background: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            padding: 0 2px !important; /* Minimal input padding */
+            color: inherit !important;
+            transition: all 0.2s;
+            color-scheme: light; /* Force light picker in light mode for consistency */
+        }
+        .dark .numbers-table input,
+        .dark .numbers-table select {
+            color-scheme: dark;
+        }
+        
+        /* Focus state for inputs - Subtle underline or background */
+        .numbers-table input:focus, 
+        .numbers-table select:focus {
+            background: #ffffff !important; /* Force white background in light mode */
+            outline: none !important;
+            color: #3b82f6 !important; /* Bright blue text on focus for better visibility */
+            box-shadow: inset 0 0 0 1px #3b82f6 !important;
+        }
+
+        .dark .numbers-table input:focus, 
+        .dark .numbers-table select:focus {
+            background: #0f172a !important; /* Force dark background in dark mode */
+            color: #3b82f6 !important;
+            box-shadow: inset 0 0 0 1px #3b82f6 !important;
+        }
+        
+        /* Center content adjustments */
+        .numbers-header th:first-child,
+        .numbers-table td:first-child input {
+            text-align: center;
+        }
+      `}</style>
+
+      {/* Header Section - Consolidated Title & Actions */}
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-[#fbfbfd] dark:bg-slate-900 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+                {/* Changed Icon to Table */}
+                <Table size={18} className="text-slate-800 dark:text-slate-100" strokeWidth={2} />
+                <h3 className="text-sm font-bold text-slate-800 dark:text-white tracking-tight">工作计划表</h3>
+            </div>
+            
+            {/* Vertical Divider */}
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-700"></div>
+            
+            {/* Action Buttons Group */}
+            <div className="flex items-center gap-1">
+                 {!isReadOnly && (
+                    <button onClick={onAddTask} className={headerBtnClass} title="新建工作任务">
+                        <Plus size={14} strokeWidth={2} />
+                        <span>新建工作</span>
+                    </button>
+                 )}
+
+                 {!isReadOnly && (
+                   <button onClick={() => fileInputRef.current?.click()} className={headerBtnClass} title="从Excel导入">
+                      {/* Swapped Icon: Import now uses Download icon */}
+                      <Download size={14} strokeWidth={2} />
+                      <span>导入表格</span>
+                   </button>
+                 )}
+
+                 <button onClick={handleDownloadExcel} className={headerBtnClass} title="导出为Excel">
+                    {/* Swapped Icon: Export now uses Upload icon */}
+                    <Upload size={14} strokeWidth={2} />
+                    <span>导出表格</span>
+                 </button>
+            </div>
         </div>
-        {!isReadOnly && (
-            <button onClick={onAddTask} className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700 shadow-sm transition-all active:scale-95">
-              <Plus size={12} /> 新建工作
-            </button>
-        )}
+        
+        <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls" onChange={handleUploadExcel} />
       </div>
 
-      <div className="flex-1 overflow-auto relative">
+      <div className="flex-1 overflow-auto relative custom-scrollbar-thick bg-white dark:bg-slate-900">
         {isReadOnly && (
-            <div className="sticky top-0 right-0 left-0 bg-amber-50 border-b border-amber-200 px-3 py-1 text-[10px] text-amber-700 flex items-center gap-2 z-[20]">
+            <div className="sticky top-0 right-0 left-0 bg-amber-50 dark:bg-amber-900/50 border-b border-amber-200 dark:border-amber-800 px-3 py-1 text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-2 z-[20]">
                 <Lock size={12} /> <span>只读权限：您不拥有此项目且所有者未开放协作权限，更改将不会被保存。</span>
             </div>
         )}
-        <table className="w-full text-xs text-left border-collapse min-w-[950px] border border-slate-200 table-fixed">
-          <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm text-slate-700 font-bold uppercase tracking-tight">
+        <table className="w-full text-xs text-left border-collapse table-fixed bg-white dark:bg-slate-900 numbers-table">
+          <thead className="sticky top-0 z-10 numbers-header shadow-sm">
             <tr>
-              <th className="p-1 border border-slate-300 w-12 text-center bg-slate-100">代号</th>
-              <th className="p-1 border border-slate-300 w-20 bg-slate-100">区域</th>
-              <th className="p-1 border border-slate-300 w-48 bg-slate-100">工作名称</th>
-              <th className="p-1 border border-slate-300 w-36 bg-slate-100 text-blue-600">开始时间</th>
-              <th className="p-1 border border-slate-300 w-36 bg-slate-100 text-emerald-600">结束时间</th>
-              <th className="p-1 border border-slate-300 w-14 text-center bg-slate-100">工期</th>
-              <th className="p-1 border border-slate-300 w-20 bg-slate-100 text-center">完成率</th>
-              <th className="p-1 border border-slate-300 w-16 bg-slate-100">类型</th>
-              <th className="p-1 border border-slate-300 w-24 bg-slate-100">紧前</th>
-              <th className="p-1 border border-slate-300 w-10 text-center bg-slate-100">操作</th>
+              <th style={{ width: colWidths.id }} className="relative">
+                  代号
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'id')} />
+              </th>
+              <th style={{ width: colWidths.zone }} className="relative">
+                  区域
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'zone')} />
+              </th>
+              <th style={{ width: colWidths.name }} className="relative">
+                  工作名称
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'name')} />
+              </th>
+              <th style={{ width: colWidths.start }} className="relative">
+                  开始时间
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'start')} />
+              </th>
+              <th style={{ width: colWidths.end }} className="relative">
+                  结束时间
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'end')} />
+              </th>
+              <th style={{ width: colWidths.duration }} className="relative">
+                  工期（d）
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'duration')} />
+              </th>
+              <th style={{ width: colWidths.completion }} className="relative">
+                  完成率
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'completion')} />
+              </th>
+              <th style={{ width: colWidths.type }} className="relative">
+                  类型
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'type')} />
+              </th>
+              <th style={{ width: colWidths.predecessors }} className="relative">
+                  紧前
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'predecessors')} />
+              </th>
+              <th style={{ width: colWidths.actions }} className="relative">
+                  操作
+                  <div className="resizer" onMouseDown={(e) => startResize(e, 'actions')} />
+              </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {flattenedTasks.map(({ task, level }) => {
               const startOffset = task.earlyStart || 0;
               const finishOffset = Math.max(startOffset, (task.earlyFinish || 1) - 1);
               const isSummaryTask = !!task.isSummary;
 
               return (
-                <tr key={task.id} className={`hover:bg-blue-50/20 group transition-colors ${task.isCritical ? 'bg-red-50/10' : 'bg-white'} ${isSummaryTask ? 'font-semibold bg-slate-50' : ''}`}>
-                  <td className="p-0 border border-slate-300 h-8">
-                    <input type="text" value={task.id} disabled={isReadOnly} onChange={(e) => onUpdateTask({ ...task, id: e.target.value })} className="w-full h-full bg-transparent px-1 text-center outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 disabled:cursor-not-allowed" />
+                <tr key={task.id} className={`hover:bg-blue-50/30 dark:hover:bg-blue-900/10 group transition-colors ${task.isCritical ? 'bg-red-50/5 dark:bg-red-900/5' : ''} ${isSummaryTask ? 'font-bold bg-slate-50/50 dark:bg-slate-800/50' : ''}`}>
+                  <td className="p-0 h-9">
+                    <input type="text" value={task.id} disabled={isReadOnly} onChange={(e) => onUpdateTask({ ...task, id: e.target.value })} className="w-full h-full px-0.5 text-center disabled:cursor-not-allowed dark:text-slate-300 font-mono text-[11px]" />
                   </td>
-                  <td className="p-0 border border-slate-300 h-8">
-                    <input type="text" value={task.zone || ''} disabled={isReadOnly} onChange={(e) => onUpdateTask({ ...task, zone: e.target.value })} className="w-full h-full bg-transparent px-1 outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 text-slate-600 disabled:cursor-not-allowed" />
+                  <td className="p-0 h-9">
+                    <input type="text" value={task.zone || ''} disabled={isReadOnly} onChange={(e) => onUpdateTask({ ...task, zone: e.target.value })} className="w-full h-full px-0.5 text-slate-700 dark:text-slate-300 disabled:cursor-not-allowed text-[11px]" />
                   </td>
-                  <td className="p-0 border border-slate-300 h-8">
-                    <div className="flex items-center h-full" style={{ paddingLeft: level * 16 + 4 }}>
+                  <td className="p-0 h-9">
+                    <div className="flex items-center h-full px-1" style={{ paddingLeft: level * 16 + 2 }}>
                       {isSummaryTask ? (
-                        <button onClick={(e) => { e.stopPropagation(); toggleCollapse(task); }} className="mr-1 text-slate-500 hover:text-blue-600">
+                        <button onClick={(e) => { e.stopPropagation(); toggleCollapse(task); }} className="mr-0.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                           {task.isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                         </button>
-                      ) : <div className="w-3.5 mr-1" />}
-                      <input type="text" value={task.name} disabled={isReadOnly} onKeyDown={(e) => handleKeyDown(e, task)} onChange={(e) => onUpdateTask({ ...task, name: e.target.value })} className={`w-full h-full bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 disabled:cursor-not-allowed ${isSummaryTask ? 'text-slate-800' : 'text-slate-700'}`} />
+                      ) : <div className="w-4 mr-0.5" />}
+                      <input type="text" value={task.name} disabled={isReadOnly} onKeyDown={(e) => handleKeyDown(e, task)} onChange={(e) => onUpdateTask({ ...task, name: e.target.value })} className={`w-full h-full disabled:cursor-not-allowed text-[12px] px-0.5 ${isSummaryTask ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'}`} />
                     </div>
                   </td>
-                  <td className="p-0 border border-slate-300 h-8">
+                  <td className="p-0 h-9">
                     <div 
-                      className={`relative w-full h-full flex items-center group/date ${isSummaryTask || isReadOnly ? '' : 'cursor-pointer hover:bg-blue-50/50'}`}
+                      className={`relative w-full h-full flex items-center group/date px-0.5`}
                       onClick={(e) => {
                         const input = e.currentTarget.querySelector('input');
                         if (input && !isSummaryTask && !isReadOnly) {
@@ -258,17 +472,14 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
                         value={formatDateForInput(startOffset)}
                         onChange={(e) => handleStartChange(task, e.target.value)}
                         disabled={isSummaryTask || isReadOnly}
-                        className={`w-full h-full bg-transparent pl-2 pr-6 outline-none focus:ring-1 focus:ring-blue-400 text-xs font-mono border-none pointer-events-auto ${isSummaryTask || isReadOnly ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''}`}
+                        className={`w-full h-full text-[11px] font-mono pointer-events-auto text-slate-600 dark:text-slate-300 ${isSummaryTask || isReadOnly ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                         onClick={(e) => e.stopPropagation()}
                       />
-                      {!isSummaryTask && !isReadOnly && (
-                        <CalendarDays size={12} className="absolute right-1.5 text-slate-300 group-hover/date:text-blue-500 pointer-events-none transition-colors" />
-                      )}
                     </div>
                   </td>
-                  <td className="p-0 border border-slate-300 h-8">
+                  <td className="p-0 h-9">
                     <div 
-                      className={`relative w-full h-full flex items-center group/date ${isSummaryTask || isReadOnly ? '' : 'cursor-pointer hover:bg-emerald-50/50'}`}
+                      className={`relative w-full h-full flex items-center group/date px-0.5`}
                       onClick={(e) => {
                         const input = e.currentTarget.querySelector('input');
                         if (input && !isSummaryTask && !isReadOnly) {
@@ -281,20 +492,19 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
                         value={formatDateForInput(finishOffset)}
                         onChange={(e) => handleEndChange(task, e.target.value)}
                         disabled={isSummaryTask || isReadOnly}
-                        className={`w-full h-full bg-transparent pl-2 pr-6 outline-none focus:ring-1 focus:ring-emerald-400 text-xs font-mono border-none pointer-events-auto ${isSummaryTask || isReadOnly ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''}`}
+                        className={`w-full h-full text-[11px] font-mono pointer-events-auto text-slate-600 dark:text-slate-300 ${isSummaryTask || isReadOnly ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                         onClick={(e) => e.stopPropagation()}
                       />
-                      {!isSummaryTask && !isReadOnly && (
-                        <CalendarDays size={12} className="absolute right-1.5 text-slate-300 group-hover/date:text-emerald-500 pointer-events-none transition-colors" />
-                      )}
                     </div>
                   </td>
-                  <td className="p-0 border border-slate-300 h-8 text-center font-bold text-slate-600 bg-slate-50">
-                    {task.duration}
+                  <td className="p-0 h-9 text-center text-slate-700 dark:text-slate-300 text-[11px]">
+                     <div className="w-full h-full flex items-center justify-center">
+                        {task.duration}
+                     </div>
                   </td>
-                  <td className="p-0 border border-slate-300 h-8">
+                  <td className="p-0 h-9">
                     {!isSummaryTask && (
-                      <div className="flex items-center gap-1 px-1 h-full">
+                      <div className="w-full h-full px-0.5">
                         <input 
                           type="number" 
                           min="0" 
@@ -302,16 +512,15 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
                           value={task.completion || 0} 
                           disabled={isReadOnly}
                           onChange={(e) => onUpdateTask({ ...task, completion: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-                          className="w-10 h-full bg-transparent text-center outline-none focus:ring-1 focus:ring-blue-400 disabled:cursor-not-allowed font-bold"
+                          className="w-full h-full text-center disabled:cursor-not-allowed dark:text-slate-300 text-[11px]"
                         />
-                        <span className="text-[10px] text-slate-400">%</span>
                       </div>
                     )}
                   </td>
-                  <td className="p-0 border border-slate-300 h-8">
-                    <div className="w-full h-full flex items-center px-1 text-slate-500">
-                      {isSummaryTask ? "汇总" : (
-                        <select value={task.type} disabled={isReadOnly} onChange={(e) => handleTypeChange(task, e.target.value as LinkType)} className="w-full h-full bg-transparent text-xs outline-none cursor-pointer border-none appearance-none focus:ring-1 focus:ring-blue-400 disabled:cursor-not-allowed">
+                  <td className="p-0 h-9">
+                    <div className="w-full h-full flex items-center px-0.5 text-slate-600 dark:text-slate-400">
+                      {isSummaryTask ? <span className="text-[10px] italic text-slate-400 pl-1">汇总</span> : (
+                        <select value={task.type} disabled={isReadOnly} onChange={(e) => handleTypeChange(task, e.target.value as LinkType)} className="w-full h-full text-[11px] cursor-pointer appearance-none disabled:cursor-not-allowed dark:bg-slate-900 dark:text-slate-300">
                           <option value={LinkType.Real}>实工作</option>
                           <option value={LinkType.Virtual}>虚工作</option>
                           <option value={LinkType.Wavy}>里程碑</option>
@@ -319,17 +528,17 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
                       )}
                     </div>
                   </td>
-                  <td className="p-0 border border-slate-300 h-8 relative group/pred">
+                  <td className="p-0 h-9 relative group/pred px-0.5">
                     {!isSummaryTask && (
                       <>
-                        <input type="text" value={task.predecessors.join(',')} disabled={isReadOnly} onChange={(e) => handlePredecessorsTextChange(task, e.target.value)} className="w-full h-full bg-transparent px-1 outline-none focus:bg-white focus:ring-1 focus:ring-blue-400 text-slate-600 text-[11px] disabled:cursor-not-allowed" />
-                        {!isReadOnly && <button onClick={() => setLinkModalTaskId(task.id)} className="opacity-0 group-hover/pred:opacity-100 absolute right-0 top-0 bottom-0 bg-slate-100 hover:bg-blue-100 text-slate-400 hover:text-blue-600 px-1 border-l border-slate-200"><LinkIcon size={12} /></button>}
+                        <input type="text" value={task.predecessors.join(',')} disabled={isReadOnly} onChange={(e) => handlePredecessorsTextChange(task, e.target.value)} className="w-full h-full text-slate-600 dark:text-slate-300 text-[11px] disabled:cursor-not-allowed" />
+                        {!isReadOnly && <button onClick={() => setLinkModalTaskId(task.id)} className="opacity-0 group-hover/pred:opacity-100 absolute right-0 top-0 bottom-0 bg-slate-100 dark:bg-slate-700 hover:bg-blue-100 dark:hover:bg-blue-900 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 px-1 border-l border-slate-200 dark:border-slate-600 transition-opacity"><LinkIcon size={12} /></button>}
                       </>
                     )}
                   </td>
-                  <td className="p-0 border border-slate-300 h-8 text-center bg-white">
+                  <td className="p-0 h-9 text-center">
                     {!isReadOnly && (
-                        <button onClick={() => onDeleteTask(task.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash size={13} /></button>
+                        <button onClick={() => onDeleteTask(task.id)} className="text-slate-400 hover:text-red-500 transition-colors p-1 opacity-50 hover:opacity-100"><Trash size={14} /></button>
                     )}
                   </td>
                 </tr>
@@ -339,46 +548,25 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ tasks, isReadOnly, onUpda
         </table>
       </div>
 
-      {isWpsModalOpen && (
-        <div className="absolute inset-0 z-50 bg-slate-900/10 backdrop-blur-[2px] flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-md flex flex-col animate-in fade-in zoom-in duration-200">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 rounded-t-lg">
-              <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2">Excel 交互</h4>
-              <button onClick={() => setIsWpsModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X size={18} /></button>
-            </div>
-            <div className="p-6 space-y-4">
-              <button onClick={handleDownloadExcel} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 font-bold transition">导出为 Excel (.xlsx)</button>
-              {!isReadOnly && (
-                <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 transition group">
-                    <Upload size={24} className="text-slate-400 group-hover:text-emerald-500 mb-2" />
-                    <p className="text-sm font-bold text-slate-600">点击上传 Excel 文件导入</p>
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls" onChange={handleUploadExcel} />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {linkModalTaskId && editingTask && (
-        <div className="absolute inset-0 z-50 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-sm flex flex-col max-h-[80%] animate-in fade-in zoom-in duration-200">
-            <div className="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-lg">
-              <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><LinkIcon size={14} className="text-blue-500" /> 设置紧前工作</h4>
-              <button onClick={() => setLinkModalTaskId(null)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+        <div className="absolute inset-0 z-50 bg-slate-900/10 dark:bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-sm flex flex-col max-h-[80%] animate-in fade-in zoom-in duration-200">
+            <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50 rounded-t-lg">
+              <h4 className="font-bold text-slate-700 dark:text-slate-200 text-sm flex items-center gap-2"><LinkIcon size={14} className="text-blue-500" /> 设置紧前工作</h4>
+              <button onClick={() => setLinkModalTaskId(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={16} /></button>
             </div>
             <div className="p-2 flex-1 overflow-y-auto">
               {tasks.filter(t => t.id !== editingTask.id && !t.isSummary).map(t => {
                 const isSelected = editingTask.predecessors.includes(t.id);
                 return (
-                  <div key={t.id} onClick={() => togglePredecessor(editingTask, t.id)} className={`flex items-center gap-2 p-2 rounded cursor-pointer mb-1 border transition-all ${isSelected ? 'bg-blue-50 border-blue-200 shadow-sm' : 'hover:bg-slate-50 border-transparent text-slate-500'}`}>
-                    {isSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} className="text-slate-300" />}
-                    <div className="flex-1 truncate text-xs font-medium"><span className="bg-slate-200 rounded px-1 mr-1 text-[10px]">{t.id}</span>{t.name}</div>
+                  <div key={t.id} onClick={() => togglePredecessor(editingTask, t.id)} className={`flex items-center gap-2 p-2 rounded cursor-pointer mb-1 border transition-all ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 shadow-sm' : 'hover:bg-slate-50 dark:hover:bg-slate-700 border-transparent text-slate-500 dark:text-slate-400'}`}>
+                    {isSelected ? <CheckSquare size={16} className="text-blue-600 dark:text-blue-400" /> : <Square size={16} className="text-slate-300 dark:text-slate-600" />}
+                    <div className="flex-1 truncate text-xs font-medium"><span className="bg-slate-200 dark:bg-slate-600 rounded px-1 mr-1 text-[10px] dark:text-slate-200">{t.id}</span>{t.name}</div>
                   </div>
                 );
               })}
             </div>
-            <div className="p-3 border-t bg-slate-50 rounded-b-lg flex justify-end">
+            <div className="p-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-b-lg flex justify-end">
               <button onClick={() => setLinkModalTaskId(null)} className="bg-blue-600 text-white text-xs px-4 py-2 rounded shadow hover:bg-blue-700 transition font-bold">完成</button>
             </div>
           </div>

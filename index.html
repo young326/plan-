@@ -3,69 +3,78 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IntelliPlan AI - Liquid Glass Edition</title>
+    <title>IntelliPlan AI - Clean Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              slate: {
+                850: '#1e293b', 
+              }
+            }
+          }
+        }
+      }
+    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&display=swap');
       
-      :root {
-        --glass-bg: rgba(255, 255, 255, 0.4);
-        --glass-border: rgba(255, 255, 255, 0.5);
-        --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
-      }
-
       body {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        background: #0f172a;
+        background: #f1f5f9;
+        color: #0f172a;
         overflow: hidden;
         margin: 0;
         height: 100vh;
       }
 
-      /* macOS 26 Liquid Mesh Background */
-      .mesh-bg {
-        position: fixed;
-        inset: 0;
-        z-index: -1;
-        background-color: #0f172a;
-        background-image: 
-          radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-          radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-          radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%), 
-          radial-gradient(at 0% 100%, hsla(225,39%,30%,1) 0, transparent 50%), 
-          radial-gradient(at 100% 100%, hsla(253,16%,7%,1) 0, transparent 50%);
-        filter: blur(100px);
-        transform: scale(1.2);
-        animation: mesh-flow 20s ease-in-out infinite alternate;
+      .dark body {
+        background: #020617;
+        color: #f8fafc;
       }
 
-      @keyframes mesh-flow {
-        0% { transform: scale(1.2) rotate(0deg); }
-        100% { transform: scale(1.4) rotate(5deg); }
-      }
-
-      /* Liquid Glass Utility Classes */
+      /* Clean Panel Style */
       .glass-panel {
-        background: var(--glass-bg);
-        backdrop-filter: blur(50px) saturate(220%);
-        border: 1px solid var(--glass-border);
-        box-shadow: var(--glass-shadow);
-        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        transition: all 0.2s ease-in-out;
       }
 
+      .dark .glass-panel {
+        background: #1e293b;
+        border: 1px solid #334155;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      }
+
+      /* Clean Card Style */
       .glass-card {
-        background: rgba(255, 255, 255, 0.25);
-        backdrop-filter: blur(30px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        transition: all 0.3s ease;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      }
+
+      .dark .glass-card {
+        background: #0f172a;
+        border: 1px solid #334155;
       }
 
       .glass-card:hover {
-        background: rgba(255, 255, 255, 0.35);
-        transform: translateY(-2px);
+        border-color: #94a3b8;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
       }
 
-      /* Webkit Adjustments */
+      .dark .glass-card:hover {
+        border-color: #64748b;
+        background: #1e293b;
+      }
+
+      /* Webkit Scrollbar */
       ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -74,43 +83,46 @@
         background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 10px;
-        backdrop-filter: blur(5px);
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #475569;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.4);
+        background: #94a3b8;
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
       }
 
       .liquid-button {
         position: relative;
         overflow: hidden;
-        transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        transition: all 0.2s;
       }
       .liquid-button:active {
-        transform: scale(0.96);
-      }
-      .liquid-button::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(120deg, transparent, rgba(255,255,255,0.3), transparent);
-        transform: translateX(-100%);
-        transition: transform 0.6s;
-      }
-      .liquid-button:hover::after {
-        transform: translateX(100%);
+        transform: scale(0.98);
       }
 
+      /* Form Elements */
       input, select, textarea {
-        background: rgba(255, 255, 255, 0.1) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
         color: #1e293b !important;
+        border-radius: 0.5rem;
       }
-      input:focus {
-        border-color: rgba(59, 130, 246, 0.5) !important;
-        background: rgba(255, 255, 255, 0.2) !important;
+      
+      .dark input, .dark select, .dark textarea {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f1f5f9 !important;
+      }
+
+      input:focus, select:focus, textarea:focus {
+        border-color: #3b82f6 !important;
+        outline: 2px solid rgba(59, 130, 246, 0.2);
+        outline-offset: 1px;
       }
     </style>
     <script type="importmap">
@@ -131,7 +143,6 @@
     </script>
   </head>
   <body>
-    <div class="mesh-bg"></div>
     <div id="root"></div>
   </body>
 </html>

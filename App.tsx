@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Project, Task, LinkType, Annotation, User, SyncMessage, ProjectVisibility } from './types';
 import ProjectList from './components/ProjectList';
@@ -8,24 +7,42 @@ import AIAssistant from './components/AIAssistant';
 import Auth from './components/Auth';
 import VersionModal from './components/VersionModal';
 import ManagementConsole from './components/ManagementConsole';
-import { Undo, Redo, CloudCheck, Loader2, ChevronLeft, PanelLeftOpen, Columns, Share2, Globe, LogOut, Users, Download, Zap, HardHat, X, ShieldAlert, Settings, Info } from 'lucide-react';
+import { Undo, Redo, CloudCheck, Loader2, ChevronLeft, PanelLeftOpen, Columns, Share2, Globe, LogOut, Users, Download, Zap, HardHat, X, ShieldAlert, Settings, Info, Sun, Moon } from 'lucide-react';
 
 const SYNC_CHANNEL = 'intelliplan_sync_v1';
 const CURRENT_VERSION = 'v2.6.0';
 
 const App: React.FC = () => {
-  // 从本地存储初始化用户，如果不存在则为 null (显示登录页)
+  // 临时逻辑：默认直接登录管理员账号
   const [user, setUser] = useState<User | null>(() => {
-    try {
-      const savedUser = localStorage.getItem('intelliplan_user');
-      if (savedUser) {
-        return JSON.parse(savedUser);
-      }
-    } catch (e) {
-      console.error("Failed to parse user from local storage", e);
-    }
-    return null;
+    return {
+      id: '18663187732',
+      username: '系统管理员 (调试模式)',
+      phone: '18663187732',
+      role: 'admin',
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=admin`,
+      createdAt: Date.now()
+    };
   });
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark' || 
+             (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
 
   const initialProject: Project = { 
     id: '1', 
@@ -135,7 +152,7 @@ const App: React.FC = () => {
     }
   }, [user, activeProjectId]);
 
-  const [leftWidth, setLeftWidth] = useState(260);
+  const [leftWidth, setLeftWidth] = useState(210);
   const [middleWidth, setMiddleWidth] = useState(420);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isMiddleCollapsed, setIsMiddleCollapsed] = useState(false);
@@ -250,82 +267,86 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('intelliplan_user');
     setUser(null);
   };
 
-  if (!user) return <Auth onLogin={(u) => {
-    localStorage.setItem('intelliplan_user', JSON.stringify(u));
-    setUser(u);
-  }} />;
+  if (!user) return <Auth onLogin={setUser} />;
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden p-3 sm:p-5 gap-3 sm:gap-5">
-      <header className="h-16 glass-panel rounded-[1.25rem] px-8 flex items-center justify-between shrink-0 shadow-2xl z-[100] border-white/50">
+    <div className="flex flex-col h-screen w-screen overflow-hidden p-3 sm:p-5 gap-3 sm:gap-5 transition-colors duration-300">
+      <header className="h-16 glass-panel rounded-[1.25rem] px-8 flex items-center justify-between shrink-0 shadow-sm z-[100] text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 rounded-2xl shadow-xl shadow-blue-500/20">
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
               <HardHat size={22} className="text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="font-black tracking-tight text-base uppercase leading-tight text-slate-900">IntelliPlan AI</span>
-              <button onClick={() => setIsVersionModalOpen(true)} className="text-[10px] text-slate-500 font-bold hover:text-blue-600 transition-colors text-left flex items-center gap-1">
+              <span className="font-black tracking-tight text-base uppercase leading-tight text-slate-900 dark:text-white">IntelliPlan AI</span>
+              <button onClick={() => setIsVersionModalOpen(true)} className="text-[10px] text-slate-500 dark:text-slate-400 font-bold hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left flex items-center gap-1">
                 {CURRENT_VERSION} <Info size={10} />
               </button>
             </div>
           </div>
-          <div className="h-8 w-px bg-slate-400/20"></div>
-          <div className="flex items-center gap-4 bg-white/20 backdrop-blur-2xl px-4 py-2 rounded-full border border-white/40">
+          <div className="h-8 w-px bg-slate-200 dark:bg-slate-700"></div>
+          <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-900 px-4 py-2 rounded-full border border-slate-100 dark:border-slate-700">
             <div className="flex -space-x-2.5">
-              <img src={user.avatar} className="w-7 h-7 rounded-full border-2 border-white shadow-md" title={`你 (${user.username})`} />
-              <div className="w-7 h-7 rounded-full bg-indigo-500 border-2 border-white flex items-center justify-center text-[10px] text-white font-black shadow-md">+2</div>
+              <img src={user.avatar} className="w-7 h-7 rounded-full border-2 border-white dark:border-slate-700 shadow-sm" title={`你 (${user.username})`} />
+              <div className="w-7 h-7 rounded-full bg-indigo-500 border-2 border-white dark:border-slate-700 flex items-center justify-center text-[10px] text-white font-black shadow-sm">+2</div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_12px_#34d399]"></div>
-              <span className="text-[10px] font-black text-slate-700 uppercase tracking-[0.15em]">多人协作在线</span>
+              <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-[0.15em]">多人协作在线</span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
+            title={isDarkMode ? "切换亮色模式" : "切换深色模式"}
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
           {user.role === 'admin' && (
             <button 
               onClick={() => setIsMgmtConsoleOpen(true)}
-              className="liquid-button flex items-center gap-2 bg-slate-900/10 hover:bg-slate-900/20 text-slate-900 px-5 py-2.5 rounded-2xl transition-all text-xs font-black uppercase tracking-wider border border-white/60"
+              className="liquid-button flex items-center gap-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white px-5 py-2.5 rounded-xl transition-all text-xs font-black uppercase tracking-wider"
             >
               <Settings size={18} /> 管理后台
             </button>
           )}
 
           {activeProject && !canEditActiveProject && (
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-700 text-xs font-black uppercase">
+            <div className="flex items-center gap-2 px-5 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-700 dark:text-amber-400 text-xs font-black uppercase">
               <ShieldAlert size={18} /> 只读模式
             </div>
           )}
 
           {showSaveSuccess && (
-            <div className="flex items-center gap-2 text-emerald-600 text-xs font-black animate-in fade-in uppercase">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-xs font-black animate-in fade-in uppercase">
               <CloudCheck size={20} /> 实时已同步
             </div>
           )}
           
           <button 
             onClick={() => setIsDeployModalOpen(true)} 
-            className="liquid-button flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-2xl transition-all shadow-xl shadow-blue-500/30 text-xs font-black uppercase tracking-wider"
+            className="liquid-button flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl transition-all shadow-md text-xs font-black uppercase tracking-wider"
           >
              <Globe size={16} /> 部署应用
           </button>
           
-          <div className="w-px h-8 bg-slate-400/20 mx-2"></div>
+          <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2"></div>
           
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-end">
-                <span className="text-xs font-black text-slate-900 leading-none mb-1">{user.username}</span>
-                <span className="text-[9px] text-slate-500 font-bold tracking-tight">{user.phone}</span>
+                <span className="text-xs font-black text-slate-900 dark:text-white leading-none mb-1">{user.username}</span>
+                <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold tracking-tight">{user.phone}</span>
             </div>
             <button 
               onClick={handleLogout} 
-              className="p-3 text-slate-500 hover:text-red-600 hover:bg-red-500/10 rounded-2xl transition-all border border-transparent hover:border-red-500/30"
+              className="p-3 text-slate-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
               title="退出登录"
             >
                <LogOut size={20} />
@@ -334,10 +355,10 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex flex-1 gap-4 sm:gap-6 overflow-hidden">
+      <main className="flex flex-1 gap-2 sm:gap-2 overflow-hidden">
         <div 
           style={{ width: isLeftCollapsed ? 80 : leftWidth }} 
-          className="flex-shrink-0 glass-panel rounded-[1.25rem] overflow-hidden flex flex-col shadow-2xl border-white/40"
+          className="flex-shrink-0 glass-panel rounded-[1.25rem] overflow-hidden flex flex-col shadow-lg border-slate-200 dark:border-slate-800"
         >
           <ProjectList 
             projects={visibleProjects} 
@@ -396,7 +417,7 @@ const App: React.FC = () => {
 
         <div 
           style={{ width: isMiddleCollapsed ? 80 : middleWidth }} 
-          className="flex-shrink-0 glass-panel rounded-[1.25rem] overflow-hidden flex flex-col shadow-2xl border-white/40"
+          className="flex-shrink-0 glass-panel rounded-[1.25rem] overflow-hidden flex flex-col shadow-lg border-slate-200 dark:border-slate-800"
         >
           <ScheduleTable 
             tasks={calculatedTasks} 
@@ -409,7 +430,7 @@ const App: React.FC = () => {
           />
         </div>
 
-        <div className="flex-1 glass-panel rounded-[1.5rem] overflow-hidden flex flex-col shadow-2xl border-white/50 bg-white/20">
+        <div className="flex-1 glass-panel rounded-[1.5rem] overflow-hidden flex flex-col shadow-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <NetworkDiagram 
             tasks={calculatedTasks.filter(t => !t.isSummary)} 
             projectStartDate={new Date(activeProject.startDate || Date.now())} 
@@ -421,6 +442,7 @@ const App: React.FC = () => {
             isFocusMode={isLeftCollapsed && isMiddleCollapsed} 
             onToggleFocusMode={() => { setIsLeftCollapsed(!isLeftCollapsed); setIsMiddleCollapsed(!isMiddleCollapsed); }} 
             onExportJson={handleExportFullProject}
+            isDarkMode={isDarkMode}
           />
         </div>
       </main>

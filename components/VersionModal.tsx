@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { X, Info, Milestone, Sparkles, ShieldCheck } from 'lucide-react';
 
@@ -36,7 +35,7 @@ const VersionModal: React.FC<VersionModalProps> = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[3000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in fade-in duration-300" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in fade-in duration-300 border border-white/10" onClick={e => e.stopPropagation()}>
         <div className="p-6 bg-gradient-to-br from-slate-800 to-slate-950 text-white relative">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -54,19 +53,19 @@ const VersionModal: React.FC<VersionModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
         
-        <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-8">
+        <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-8 bg-white dark:bg-slate-900">
           {versions.map((v, i) => (
-            <div key={v.tag} className="relative pl-8 border-l-2 border-slate-100 last:border-0 pb-2">
-              <div className="absolute left-[-9px] top-0 w-4 h-4 rounded-full bg-white border-4 border-blue-500"></div>
+            <div key={v.tag} className="relative pl-8 border-l-2 border-slate-100 dark:border-slate-800 last:border-0 pb-2">
+              <div className="absolute left-[-9px] top-0 w-4 h-4 rounded-full bg-white dark:bg-slate-900 border-4 border-blue-500"></div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full">{v.tag}</span>
+                <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 text-[10px] font-black px-2 py-0.5 rounded-full">{v.tag}</span>
                 <span className="text-[10px] text-slate-400 font-bold">{v.date}</span>
               </div>
-              <h4 className="text-sm font-bold text-slate-800 mb-2">{v.title}</h4>
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">{v.title}</h4>
               <ul className="space-y-1.5">
                 {v.updates.map((item, idx) => (
-                  <li key={idx} className="text-xs text-slate-500 leading-relaxed flex items-start gap-2">
-                    <span className="mt-1 w-1 h-1 rounded-full bg-slate-300 shrink-0"></span>
+                  <li key={idx} className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed flex items-start gap-2">
+                    <span className="mt-1 w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0"></span>
                     {item}
                   </li>
                 ))}
@@ -75,12 +74,12 @@ const VersionModal: React.FC<VersionModalProps> = ({ isOpen, onClose }) => {
           ))}
         </div>
 
-        <div className="p-6 border-t bg-slate-50 flex items-center justify-between">
+        <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
             <ShieldCheck size={14} className="text-emerald-500" />
             企业级稳定版
           </div>
-          <button onClick={onClose} className="bg-slate-900 text-white text-xs font-bold px-6 py-2 rounded-xl hover:bg-slate-800 transition-all">
+          <button onClick={onClose} className="bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold px-6 py-2 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-600 transition-all">
             我知道了
           </button>
         </div>
