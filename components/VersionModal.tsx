@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { X, Info, Milestone, Sparkles, ShieldCheck } from 'lucide-react';
 
@@ -10,6 +11,16 @@ const VersionModal: React.FC<VersionModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const versions = [
+    {
+      tag: 'v2.7.0',
+      date: '2024-05-27',
+      title: '界面交互与视觉体验升级',
+      updates: [
+        '参考现代视频剪辑软件设计语言，重构任务属性编辑面板。',
+        '优化进度调节滑块，支持动态颜色填充与高精度拖拽手柄。',
+        '增强深色模式下的视觉层次感与控件对比度。'
+      ]
+    },
     {
       tag: 'v2.6.0',
       date: '2024-05-20',

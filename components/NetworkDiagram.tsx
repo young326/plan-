@@ -1,7 +1,8 @@
+
 import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Task, LinkType, Annotation } from '../types';
-import { ZoomIn, ZoomOut, Download, Type, BoxSelect, Settings, Calendar, MousePointer2, Layers, Flag, AlertTriangle, Star, CheckCircle, Edit3, X, Undo, Redo, Save, Image as ImageIcon, FileText, Code, FileCode, Globe, MoveVertical, ArrowDownUp, Share2, ChevronUp, ChevronDown, ListTree, Link as LinkIcon, Hash, FileJson, Clock, Move, Maximize2, Minimize2, Info, Printer, Copy, Trash2, Percent, Search, Disc } from 'lucide-react';
+import { ZoomIn, ZoomOut, Download, Type, BoxSelect, Settings, Calendar, MousePointer2, Layers, Flag, AlertTriangle, Star, CheckCircle, Edit3, X, Undo, Redo, Save, Image as ImageIcon, FileText, Code, FileCode, Globe, MoveVertical, ArrowDownUp, Share2, ChevronUp, ChevronDown, ListTree, Link as LinkIcon, Hash, FileJson, Clock, Move, Maximize2, Minimize2, Info, Printer, Copy, Trash2, Percent, Search, Disc, Palette } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -58,6 +59,11 @@ const HEADER_HEIGHT = 60;
 
 const ZONE_COLORS = [
   '#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2', '#4f46e5', '#ea580c', '#65a30d', '#be185d'
+];
+
+const CUSTOM_COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', 
+  '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#64748b'
 ];
 
 type TimeScaleMode = 'day' | 'month' | 'year';
@@ -283,7 +289,8 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
         { label: "普通工作", color: styles.normalColor, type: "line" },
         { label: "已完成", color: styles.progressColor, type: "line" },
         { label: "里程碑", color: styles.criticalColor, type: "diamond" },
-        { label: "虚工作", color: styles.virtualColor, type: "dashed" }
+        { label: "虚工作", color: styles.virtualColor, type: "dashed" },
+        { label: "自由时差", color: styles.floatColor, type: "wavy" }
       ];
       
       const legendItemWidth = 80;
@@ -305,6 +312,13 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
              .attr("d", d3.symbol().type(d3.symbolDiamond).size(60)())
              .attr("fill", "none").attr("stroke", item.color).attr("stroke-width", 2)
              .attr("transform", "translate(10, 0)");
+        } else if (item.type === "wavy") {
+             const path = getWavyPath(0, 20, 0);
+             g.append("path")
+              .attr("d", path)
+              .attr("fill", "none")
+              .attr("stroke", item.color)
+              .attr("stroke-width", 1.5);
         }
         g.append("text")
          .attr("x", 26).attr("y", 1)
@@ -446,7 +460,9 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
         const isVirtual = task.type === LinkType.Virtual;
         const isCompleted = task.completion === 100 && !isVirtual;
 
-        let color = styles.normalColor;
+        // Determine base color with custom override priority
+        let color = task.color || styles.normalColor;
+        
         if (isCompleted) {
           color = styles.progressColor;
         } else if (task.isCritical || isMilestone) {
@@ -455,8 +471,17 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           color = styles.virtualColor;
         }
 
+        // Selection/Hover override everything
         if (isSelected) color = styles.selectionColor;
         else if (isHovered) color = styles.highlightColor;
+
+        // Dynamic marker handling for custom colors
+        if (task.color) {
+            const markerId = `arrow-${task.color.replace('#', '')}`;
+            if (defs.select(`#${markerId}`).empty()) {
+                addMarker(markerId, task.color);
+            }
+        }
 
         if (isMilestone) {
           const diamondGroup = milestoneNodeGroup.append("g").attr("transform", `translate(${endX}, ${y})`).attr("cursor", "pointer").on("click", (e) => { e.stopPropagation(); handleOpenEdit(task); }).on("mouseenter", () => setHoveredTaskId(task.id)).on("mouseleave", () => setHoveredTaskId(null)).on("contextmenu", (e) => handleTaskContextMenu(e, task));
@@ -472,13 +497,13 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
           diamondGroup.datum({ task, isStart: false }).call(dragNode as any);
         } else {
           if (task.duration > 0 || !isVirtual) {
-              const markerEnd = isSelected 
-                ? "url(#arrow-selection)" 
-                : (isCompleted 
-                  ? "url(#arrow-completed)" 
-                  : (task.isCritical 
-                    ? "url(#arrow-critical)" 
-                    : (isVirtual ? "url(#arrow-virtual)" : "url(#arrow-normal)")));
+              let markerEnd;
+              if (isSelected) markerEnd = "url(#arrow-selection)";
+              else if (isCompleted) markerEnd = "url(#arrow-completed)";
+              else if (task.isCritical) markerEnd = "url(#arrow-critical)";
+              else if (isVirtual) markerEnd = "url(#arrow-virtual)";
+              else if (task.color) markerEnd = `url(#arrow-${task.color.replace('#', '')})`;
+              else markerEnd = "url(#arrow-normal)";
 
               linkGroup.append("line")
                 .attr("x1", startX + r)
@@ -1025,23 +1050,63 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
       {editingTask && (
         <div className="absolute inset-0 z-[120] flex justify-end pointer-events-none" onClick={() => setEditingTask(null)}>
           <div className="bg-white dark:bg-slate-800 shadow-2xl border-l border-slate-200 dark:border-slate-700 w-full max-w-lg h-full flex flex-col relative animate-in slide-in-from-right duration-300 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
-             <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50"><div className="flex items-center gap-3"><div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-600 dark:text-blue-400"><Edit3 size={20}/></div><div><h4 className="font-bold text-slate-800 dark:text-white text-lg leading-tight">编辑工作属性</h4><p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold">Engineering Property Editor</p></div></div><button onClick={() => setEditingTask(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all"><X size={20}/></button></div>
+             <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50"><div className="flex items-center gap-3"><div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-600 dark:text-blue-400"><Edit3 size={20}/></div><div><h4 className="font-bold text-slate-800 dark:text-white text-lg leading-tight">工作属性</h4><p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold">Engineering Property Editor</p></div></div><button onClick={() => setEditingTask(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all"><X size={20}/></button></div>
              <div className="p-6 flex-1 overflow-y-auto space-y-6 custom-scrollbar pb-24">
                 <div className="grid grid-cols-4 gap-4"><div className="col-span-1"><label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5"><Hash size={12}/> 工作代号</label><input className="w-full border-2 border-slate-100 dark:border-slate-700 rounded-lg p-2.5 text-sm bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-500 font-mono" value={editingTask.id} disabled /></div><div className="col-span-3"><label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5"><Flag size={12}/> 工作名称</label><input className="w-full border-2 border-slate-200 dark:border-slate-600 rounded-lg p-2.5 text-sm font-semibold focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all dark:bg-slate-700 dark:text-white" value={editingTask.name} onChange={e => setEditingTask({...editingTask, name: e.target.value})} placeholder="输入任务名称..." /></div></div>
                 <div className="bg-emerald-50/50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800 space-y-3">
+                   <style>{`
+                     /* Webkit (Chrome, Safari, Edge) */
+                     .slider-thumb-custom::-webkit-slider-thumb {
+                        -webkit-appearance: none;
+                        appearance: none;
+                        width: 18px; /* Slightly larger for better touch target */
+                        height: 18px;
+                        background: #10b981; 
+                        cursor: pointer;
+                        border-radius: 50%;
+                        border: 3px solid white; /* Thicker border for pro look */
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+                        transition: all 0.15s ease;
+                     }
+                     .slider-thumb-custom::-webkit-slider-thumb:hover {
+                        transform: scale(1.15);
+                        box-shadow: 0 3px 8px rgba(16, 185, 129, 0.3); /* Green glow */
+                     }
+                     
+                     /* Firefox */
+                     .slider-thumb-custom::-moz-range-thumb {
+                        width: 18px;
+                        height: 18px;
+                        background: #10b981;
+                        cursor: pointer;
+                        border-radius: 50%;
+                        border: 3px solid white;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+                        transition: all 0.15s ease;
+                     }
+                     .slider-thumb-custom::-moz-range-thumb:hover {
+                        transform: scale(1.15);
+                        box-shadow: 0 3px 8px rgba(16, 185, 129, 0.3);
+                     }
+                   `}</style>
                    <div className="flex justify-between items-center">
                       <label className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400"><Percent size={14}/> 当前完成情况 (进度)</label>
                       <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 px-2 py-0.5 rounded shadow-sm">{editingTask.completion || 0}%</span>
                    </div>
-                   <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      step="5"
-                      value={editingTask.completion || 0} 
-                      onChange={e => setEditingTask({...editingTask, completion: parseInt(e.target.value)})}
-                      className="w-full h-2 bg-emerald-200 dark:bg-emerald-800 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-                   />
+                   <div className="relative w-full h-4 flex items-center">
+                       <input 
+                          type="range" 
+                          min="0" 
+                          max="100" 
+                          step="5"
+                          value={editingTask.completion || 0} 
+                          onChange={e => setEditingTask({...editingTask, completion: parseInt(e.target.value)})}
+                          style={{
+                            background: `linear-gradient(to right, #10b981 0%, #10b981 ${editingTask.completion || 0}%, ${isDarkMode ? '#334155' : '#e2e8f0'} ${editingTask.completion || 0}%, ${isDarkMode ? '#334155' : '#e2e8f0'} 100%)`
+                          }}
+                          className="w-full h-2 rounded-lg appearance-none cursor-pointer slider-thumb-custom focus:outline-none"
+                       />
+                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
                    <div><label className="flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 mb-1.5"><Calendar size={12}/> 开始日期</label><input type="date" className="w-full border-2 border-blue-200 dark:border-blue-800 rounded-lg p-2.5 text-sm focus:border-blue-500 outline-none transition-all cursor-pointer dark:bg-slate-700 dark:text-white" value={toLocalYYYYMMDD(addDays(projectStartDate, editingTask.earlyStart || 0))} onChange={e => { if (!e.target.value) return; const days = getDaysFromDateStr(e.target.value); const finishOffset = (editingTask.earlyFinish || 1) - 1; setEditingTask({ ...editingTask, constraintDate: days, duration: Math.max(0, finishOffset - days + 1), earlyStart: days, earlyFinish: finishOffset + 1 }); }} /></div>
@@ -1050,7 +1115,28 @@ export const NetworkDiagram: React.FC<NetworkDiagramProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                    <div><label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5"><Layers size={12}/> 分配区域</label><input className="w-full border-2 border-slate-200 dark:border-slate-600 rounded-lg p-2.5 text-sm focus:border-blue-500 outline-none transition-all dark:bg-slate-700 dark:text-white" value={editingTask.zone || ''} onChange={e => setEditingTask({...editingTask, zone: e.target.value})} list="zone-list" placeholder="选择或输入区域..." /><datalist id="zone-list">{uniqueZones.map(z => <option key={z} value={z} />)}</datalist></div>
-                   <div><label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5"><MoveVertical size={12}/> 指定泳道 (Lane)</label><input type="number" placeholder="自动排列" className="w-full border-2 border-slate-200 dark:border-slate-600 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 transition-all dark:bg-slate-700 dark:text-white" value={editingTask.manualLane ?? ''} onChange={e => setEditingTask({...editingTask, manualLane: e.target.value === '' ? undefined : parseInt(e.target.value)})} /></div>
+                   
+                   {/* Color Picker Implementation */}
+                   <div>
+                       <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5"><Palette size={12}/> 颜色标记 (对攻组)</label>
+                       <div className="flex gap-2 items-center w-full overflow-x-auto pb-1 custom-scrollbar">
+                           <button 
+                             onClick={() => setEditingTask({...editingTask, color: undefined})} 
+                             className={`w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 flex items-center justify-center transition-all ${!editingTask.color ? 'ring-2 ring-blue-500 scale-110' : 'hover:scale-105'}`}
+                             title="默认"
+                           >
+                              <X size={10} className="text-slate-400" />
+                           </button>
+                           {CUSTOM_COLORS.map(c => (
+                               <button 
+                                 key={c}
+                                 onClick={() => setEditingTask({...editingTask, color: c})}
+                                 style={{ backgroundColor: c }}
+                                 className={`shrink-0 w-6 h-6 rounded-full border border-black/5 dark:border-white/10 transition-all ${editingTask.color === c ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-blue-500 scale-110' : 'hover:scale-105'}`}
+                               />
+                           ))}
+                       </div>
+                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                    <div><label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5"><BoxSelect size={12}/> 工作性质</label><select className="w-full border-2 border-slate-200 dark:border-slate-600 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 transition-all appearance-none bg-no-repeat bg-[right_0.5rem_center] dark:bg-slate-700 dark:text-white" value={editingTask.type} onChange={e => setEditingTask({...editingTask, type: e.target.value as LinkType})}><option value={LinkType.Real}>实工作 (Normal Task)</option><option value={LinkType.Virtual}>虚工作 (Dummy Task)</option><option value={LinkType.Wavy}>里程碑 (Milestone)</option></select></div>

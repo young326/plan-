@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Project, Task, LinkType, Annotation, User, SyncMessage, ProjectVisibility } from './types';
 import ProjectList from './components/ProjectList';
@@ -7,10 +8,10 @@ import AIAssistant from './components/AIAssistant';
 import Auth from './components/Auth';
 import VersionModal from './components/VersionModal';
 import ManagementConsole from './components/ManagementConsole';
-import { Undo, Redo, CloudCheck, Loader2, ChevronLeft, PanelLeftOpen, Columns, Share2, Globe, LogOut, Users, Download, Zap, HardHat, X, ShieldAlert, Settings, Info, Sun, Moon } from 'lucide-react';
+import { Undo, Redo, CloudCheck, Loader2, ChevronLeft, PanelLeftOpen, Columns, Share2, LogOut, Users, Download, Zap, HardHat, X, ShieldAlert, Settings, Info, Sun, Moon } from 'lucide-react';
 
 const SYNC_CHANNEL = 'intelliplan_sync_v1';
-const CURRENT_VERSION = 'v2.6.0';
+const CURRENT_VERSION = 'v2.7.0';
 
 const App: React.FC = () => {
   // 临时逻辑：默认直接登录管理员账号
@@ -158,7 +159,6 @@ const App: React.FC = () => {
   const [isMiddleCollapsed, setIsMiddleCollapsed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-  const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
 
   const activeProject = useMemo(() => {
     return projects.find(p => p.id === activeProjectId) || visibleProjects[0] || initialProject;
@@ -278,7 +278,7 @@ const App: React.FC = () => {
   if (!user) return <Auth onLogin={setUser} />;
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden p-3 sm:p-5 gap-3 sm:gap-5 transition-colors duration-300">
+    <div className="flex flex-col h-screen w-screen overflow-hidden p-3 sm:p-5 gap-1 sm:gap-1.5 transition-colors duration-300">
       <header className="h-16 glass-panel rounded-[1.25rem] px-8 flex items-center justify-between shrink-0 shadow-sm z-[100] text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
@@ -334,13 +334,6 @@ const App: React.FC = () => {
               <CloudCheck size={20} /> 实时已同步
             </div>
           )}
-          
-          <button 
-            onClick={() => setIsDeployModalOpen(true)} 
-            className="liquid-button flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl transition-all shadow-md text-xs font-black uppercase tracking-wider"
-          >
-             <Globe size={16} /> 部署应用
-          </button>
           
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2"></div>
           

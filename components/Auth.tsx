@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { ShieldCheck, LogIn, HardHat, CheckCircle2, Phone, Key, Loader2, Lock, Smartphone, UserCircle, ArrowLeft, Zap, Sparkles, UserMinus, History } from 'lucide-react';
@@ -385,7 +386,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       </div>
 
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-slate-400 dark:text-slate-600 text-[10px] font-black uppercase tracking-[0.3em] opacity-80">
-        © 2024 IntelliPlan Engineering | Enterprise Edition v2.6
+        © 2024 IntelliPlan Engineering | Enterprise Edition v2.7
       </div>
     </div>
   );

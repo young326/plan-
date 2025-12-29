@@ -1,3 +1,4 @@
+
 import React, { useRef, useState } from 'react';
 import { Project, Task, User, ProjectVisibility } from '../types';
 import { FolderOpen, Plus, Save, Upload, Trash2, Undo, Redo, Lock, Eye, Users, Download, Briefcase, Cloud, MoreHorizontal, Search } from 'lucide-react';
@@ -143,12 +144,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
             </button>
 
             <button onClick={() => jsonInputRef.current?.click()} className={actionBtnClass} title="导入项目">
-                <Upload size={actionIconSize} strokeWidth={actionIconStroke} className="mb-1" />
+                <Download size={actionIconSize} strokeWidth={actionIconStroke} className="mb-1" />
                 <span className="text-[11px] font-medium">导入</span>
             </button>
 
             <button onClick={onExportProject} className={actionBtnClass} title="导出项目">
-                <Download size={actionIconSize} strokeWidth={actionIconStroke} className="mb-1" />
+                <Upload size={actionIconSize} strokeWidth={actionIconStroke} className="mb-1" />
                 <span className="text-[11px] font-medium">导出</span>
             </button>
         </div>

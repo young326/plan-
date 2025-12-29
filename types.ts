@@ -45,6 +45,7 @@ export interface Task {
   labelOffsetX?: number;
   manualLane?: number;
   completion?: number; // 完成百分比 (0-100)
+  color?: string; // Custom display color for the task
   
   // Calculated fields
   earlyStart?: number;
